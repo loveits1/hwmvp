@@ -1,0 +1,27 @@
+services:
+  hwmvp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hwmvp:${APP_VERSION:-local}
+    container_name: hwmvp
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
