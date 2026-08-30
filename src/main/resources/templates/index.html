@@ -114,8 +114,15 @@
           <p>새로운 숙제를 추가해 보세요.</p>
         </div>
       </header>
-      <form class="homework-form" id="homeworkForm" novalidate>
-        <div class="target-student"><span>대상 학생</span><strong id="targetStudent"></strong></div>
+	      <form class="homework-form" id="homeworkForm" novalidate>
+	        <div class="form-context">
+	          <div class="target-student"><span>대상 학생</span><strong id="targetStudent"></strong></div>
+	          <div class="assigned-date-field">
+	            <label for="assignedDateInput">숙제 선택일 <span aria-hidden="true">*</span></label>
+	            <input id="assignedDateInput" name="assignedDate" type="date" aria-describedby="assignedDateError">
+	            <small class="field-error" id="assignedDateError"></small>
+	          </div>
+	        </div>
         <fieldset>
           <legend>과목 <span aria-hidden="true">*</span></legend>
           <div class="subject-options" id="subjectOptions"></div>
@@ -140,11 +147,12 @@
             placeholder="숙제에 필요한 내용을 자세히 입력해 주세요."></textarea>
         </div>
         <div class="form-field">
-          <label for="dueDateInput">마감일 <span aria-hidden="true">*</span></label>
-          <input id="dueDateInput" name="dueDate" type="date" aria-describedby="dueDateError">
-          <small class="field-error" id="dueDateError"></small>
-        </div>
-        <p class="form-note">새 숙제는 진행률 0%로 등록돼요.</p>
+	          <label for="dueDateInput">마감일 <span aria-hidden="true">*</span></label>
+	          <input id="dueDateInput" name="dueDate" type="date" aria-describedby="dueDateError">
+	          <small class="field-error" id="dueDateError"></small>
+	        </div>
+	        <p class="form-note">숙제 선택일은 달력에 표시될 날짜이고, 마감일은 숙제를 끝내야 하는 날짜예요.</p>
+	        <p class="form-note">새 숙제는 진행률 0%로 등록돼요.</p>
         <div class="form-error hidden" id="formError" role="alert"></div>
         <div class="form-actions">
           <button class="secondary-button" id="cancelButton" type="button">취소</button>

@@ -31,6 +31,7 @@ public class HomeworkController {
 		this.service = service;
 	}
 
+	/** 학생의 전체 숙제 또는 특정 마감일의 숙제 목록을 제공합니다. */
 	@GetMapping("/students/{studentId}/homeworks")
 	public List<HomeworkResponse> findAll(
 			@PathVariable Long studentId,
@@ -38,6 +39,7 @@ public class HomeworkController {
 		return service.findAll(studentId, date);
 	}
 
+	/** 학생에게 숙제를 등록하고 생성된 숙제를 HTTP 201로 반환합니다. */
 	@PostMapping("/students/{studentId}/homeworks")
 	@ResponseStatus(HttpStatus.CREATED)
 	public HomeworkResponse create(
@@ -46,6 +48,7 @@ public class HomeworkController {
 		return service.create(studentId, request);
 	}
 
+	/** 숙제의 과목, 제목, 상세내용과 마감일을 변경합니다. */
 	@PatchMapping("/homeworks/{homeworkId}")
 	public HomeworkResponse update(
 			@PathVariable Long homeworkId,
@@ -53,6 +56,7 @@ public class HomeworkController {
 		return service.update(homeworkId, request);
 	}
 
+	/** 숙제를 소프트 삭제하고 응답 본문 없이 HTTP 204를 반환합니다. */
 	@DeleteMapping("/homeworks/{homeworkId}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void delete(
@@ -61,6 +65,7 @@ public class HomeworkController {
 		service.delete(homeworkId, actorId);
 	}
 
+	/** 숙제 진행률을 0, 25, 50, 75, 100 중 하나로 변경합니다. */
 	@PatchMapping("/homeworks/{homeworkId}/progress")
 	public HomeworkResponse updateProgress(
 			@PathVariable Long homeworkId,

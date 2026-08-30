@@ -15,6 +15,10 @@ public class SubjectQueryRepository {
 		this.jdbcClient = jdbcClient;
 	}
 
+	/**
+	 * 학생에게 등록된 기본·사용자 정의 과목을 화면 표시 순서로 조회합니다.
+	 * 공통코드가 없는 과목은 사용자 정의 과목으로 구분하고 기본 과목 뒤에 배치합니다.
+	 */
 	public List<SubjectResponse> findByStudentId(Long studentId) {
 		return jdbcClient.sql("""
 				SELECT subject.id,

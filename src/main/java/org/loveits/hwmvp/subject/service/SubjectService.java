@@ -15,6 +15,7 @@ public class SubjectService {
 		this.repository = repository;
 	}
 
+	/** 학생의 숙제 입력 화면에서 선택할 과목 목록을 조회합니다. */
 	public List<SubjectResponse> findByStudentId(Long studentId) {
 		return repository.findByStudentId(studentId);
 	}

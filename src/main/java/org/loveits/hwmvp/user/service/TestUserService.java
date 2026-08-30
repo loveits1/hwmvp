@@ -18,6 +18,10 @@ public class TestUserService {
 		this.repository = repository;
 	}
 
+	/**
+	 * 화면 전환용 테스트 사용자를 조회하고 선택적으로 학생 또는 학부모만 반환합니다.
+	 * 지원하지 않는 역할값은 잘못된 API 요청으로 처리합니다.
+	 */
 	public List<TestUserResponse> findAll(String role) {
 		if (role == null || role.isBlank()) {
 			return List.of(repository.findStudents(), repository.findParents())

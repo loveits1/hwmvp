@@ -19,6 +19,7 @@ public class SubjectController {
 		this.service = service;
 	}
 
+	/** 지정한 학생에게 등록된 과목 목록을 제공합니다. */
 	@GetMapping
 	public List<SubjectResponse> findByStudentId(@PathVariable Long studentId) {
 		return service.findByStudentId(studentId);

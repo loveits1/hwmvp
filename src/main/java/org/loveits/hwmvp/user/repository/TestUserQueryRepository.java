@@ -16,6 +16,9 @@ public class TestUserQueryRepository {
 		this.jdbcClient = jdbcClient;
 	}
 
+	/**
+	 * 테스트 사용자 선택 화면에 표시할 학생과 승인된 대표 학부모 이름을 조회합니다.
+	 */
 	public List<TestUserResponse> findStudents() {
 		return jdbcClient.sql("""
 				SELECT u.id,
@@ -48,6 +51,9 @@ public class TestUserQueryRepository {
 				.list();
 	}
 
+	/**
+	 * 테스트 사용자 선택 화면에 표시할 학부모와 승인된 대표 학생 정보를 조회합니다.
+	 */
 	public List<TestUserResponse> findParents() {
 		return jdbcClient.sql("""
 				SELECT u.id,
