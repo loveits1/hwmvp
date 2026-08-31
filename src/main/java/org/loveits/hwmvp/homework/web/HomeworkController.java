@@ -3,6 +3,7 @@ package org.loveits.hwmvp.homework.web;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.loveits.hwmvp.auth.dto.AuthenticatedUser;
 import org.loveits.hwmvp.homework.dto.HomeworkResponse;
 import org.loveits.hwmvp.homework.dto.HomeworkProgressRequest;
 import org.loveits.hwmvp.homework.dto.HomeworkSaveRequest;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,8 +37,9 @@ public class HomeworkController {
 	@GetMapping("/students/{studentId}/homeworks")
 	public List<HomeworkResponse> findAll(
 			@PathVariable Long studentId,
-			@RequestParam(required = false) LocalDate date) {
-		return service.findAll(studentId, date);
+			@RequestParam(required = false) LocalDate date,
+			@AuthenticationPrincipal AuthenticatedUser user) {
+		return service.findAll(studentId, date, user.id());
 	}
 
 	/** 학생에게 숙제를 등록하고 생성된 숙제를 HTTP 201로 반환합니다. */
@@ -44,16 +47,18 @@ public class HomeworkController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public HomeworkResponse create(
 			@PathVariable Long studentId,
-			@Valid @RequestBody HomeworkSaveRequest request) {
-		return service.create(studentId, request);
+			@Valid @RequestBody HomeworkSaveRequest request,
+			@AuthenticationPrincipal AuthenticatedUser user) {
+		return service.create(studentId, request, user.id());
 	}
 
 	/** 숙제의 과목, 제목, 상세내용과 마감일을 변경합니다. */
 	@PatchMapping("/homeworks/{homeworkId}")
 	public HomeworkResponse update(
 			@PathVariable Long homeworkId,
-			@Valid @RequestBody HomeworkSaveRequest request) {
-		return service.update(homeworkId, request);
+			@Valid @RequestBody HomeworkSaveRequest request,
+			@AuthenticationPrincipal AuthenticatedUser user) {
+		return service.update(homeworkId, request, user.id());
 	}
 
 	/** 숙제를 소프트 삭제하고 응답 본문 없이 HTTP 204를 반환합니다. */
@@ -61,15 +66,16 @@ public class HomeworkController {
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void delete(
 			@PathVariable Long homeworkId,
-			@RequestParam Long actorId) {
-		service.delete(homeworkId, actorId);
+			@AuthenticationPrincipal AuthenticatedUser user) {
+		service.delete(homeworkId, user.id());
 	}
 
 	/** 숙제 진행률을 0, 25, 50, 75, 100 중 하나로 변경합니다. */
 	@PatchMapping("/homeworks/{homeworkId}/progress")
 	public HomeworkResponse updateProgress(
 			@PathVariable Long homeworkId,
-			@Valid @RequestBody HomeworkProgressRequest request) {
-		return service.updateProgress(homeworkId, request);
+			@Valid @RequestBody HomeworkProgressRequest request,
+			@AuthenticationPrincipal AuthenticatedUser user) {
+		return service.updateProgress(homeworkId, request, user.id());
 	}
 }

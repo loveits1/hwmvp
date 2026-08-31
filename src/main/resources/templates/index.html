@@ -16,7 +16,7 @@
 
 <body>
   <div id="app">
-    <section class="screen user-screen" id="userScreen" aria-labelledby="userScreenTitle">
+    <section class="screen user-screen" id="loginScreen" aria-labelledby="loginScreenTitle">
       <div class="user-hero">
         <a class="brand" href="#" aria-label="하루숙제 시작 화면"><span class="brand-mark">✓</span><span>하루숙제</span></a>
         <p class="eyebrow">HOMEWORK, ONE STEP AT A TIME</p>
@@ -28,18 +28,25 @@
       </div>
       <div class="user-panel">
         <header>
-          <h2 id="userScreenTitle">누구로 시작할까요?</h2>
-          <p>테스트할 사용자를 선택해 주세요.</p>
-          <span class="test-badge">테스트 모드 · 별도 로그인 없음</span>
+          <h2 id="loginScreenTitle">로그인</h2>
+          <p>하루숙제 계정으로 시작해 주세요.</p>
+          <span class="test-badge">테스트 계정 비밀번호 · test1234!</span>
         </header>
-        <div class="role-tabs" role="tablist" aria-label="사용자 역할">
-          <button class="role-tab active" id="studentTab" type="button" role="tab" aria-selected="true"
-            data-role="student">학생</button>
-          <button class="role-tab" id="parentTab" type="button" role="tab" aria-selected="false"
-            data-role="parent">학부모</button>
-        </div>
-        <div class="user-list" id="userList" role="radiogroup" aria-label="테스트 사용자"></div>
-        <button class="primary-button start-button" id="startButton" type="button" disabled>사용자를 선택해 주세요</button>
+        <form class="login-form" id="loginForm" novalidate>
+          <div class="form-field">
+            <label for="loginIdInput">로그인 ID</label>
+            <input id="loginIdInput" name="loginId" type="text" maxlength="100" autocomplete="username"
+              placeholder="예) student-1" required autofocus>
+          </div>
+          <div class="form-field">
+            <label for="passwordInput">비밀번호</label>
+            <input id="passwordInput" name="password" type="password" maxlength="200"
+              autocomplete="current-password" placeholder="비밀번호를 입력해 주세요" required>
+          </div>
+          <p class="login-error hidden" id="loginError" role="alert"></p>
+          <button class="primary-button start-button" id="loginButton" type="submit">로그인</button>
+        </form>
+        <p class="login-help">테스트 ID: student-1, student-2, parent-1, parent-2</p>
       </div>
     </section>
 
@@ -73,7 +80,7 @@
             <span class="avatar" id="profileAvatar"></span><span aria-hidden="true">⌄</span>
           </button>
           <div class="profile-menu hidden" id="profileMenu">
-            <p id="profileMenuLabel"></p><button id="changeUserButton" type="button">사용자 변경</button>
+            <p id="profileMenuLabel"></p><button id="changeUserButton" type="button">로그아웃 및 사용자 전환</button>
           </div>
         </header>
 

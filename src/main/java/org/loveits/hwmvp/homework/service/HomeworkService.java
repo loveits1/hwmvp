@@ -7,6 +7,7 @@ import org.loveits.hwmvp.homework.dto.HomeworkResponse;
 import org.loveits.hwmvp.homework.dto.HomeworkProgressRequest;
 import org.loveits.hwmvp.homework.dto.HomeworkSaveRequest;
 import org.loveits.hwmvp.homework.repository.HomeworkRepository;
+import org.loveits.hwmvp.user.service.StudentAccessService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,13 +18,16 @@ public class HomeworkService {
 	private static final java.util.Set<Integer> ALLOWED_PROGRESS = java.util.Set.of(0, 25, 50, 75, 100);
 
 	private final HomeworkRepository repository;
+	private final StudentAccessService accessService;
 
-	public HomeworkService(HomeworkRepository repository) {
+	public HomeworkService(HomeworkRepository repository, StudentAccessService accessService) {
 		this.repository = repository;
+		this.accessService = accessService;
 	}
 
 	/** 학생과 선택 날짜를 기준으로 화면에 표시할 숙제 목록을 조회합니다. */
-	public List<HomeworkResponse> findAll(Long studentId, LocalDate date) {
+	public List<HomeworkResponse> findAll(Long studentId, LocalDate date, Long actorId) {
+		checkAccess(studentId, actorId);
 		return repository.findAll(studentId, date);
 	}
 
@@ -32,13 +36,13 @@ public class HomeworkService {
 	 * 모든 DB 변경은 하나의 트랜잭션으로 처리됩니다.
 	 */
 	@Transactional
-	public HomeworkResponse create(Long studentId, HomeworkSaveRequest request) {
-		checkAccess(studentId, request.actorId());
+	public HomeworkResponse create(Long studentId, HomeworkSaveRequest request, Long actorId) {
+		checkAccess(studentId, actorId);
 		checkDates(request.assignedDate(), request.dueDate());
 		Long subjectId = repository.findOrCreateSubject(studentId, request.subject().trim());
 		Long homeworkId = repository.create(studentId, subjectId, request.title().trim(),
-				nullIfBlank(request.description()), request.assignedDate(), request.dueDate(), request.actorId());
-		repository.addHistory(homeworkId, "HW_CREATED", request.actorId(), null,
+				nullIfBlank(request.description()), request.assignedDate(), request.dueDate(), actorId);
+		repository.addHistory(homeworkId, "HW_CREATED", actorId, null,
 				repository.snapshot(homeworkId));
 		return find(homeworkId);
 	}
@@ -47,15 +51,15 @@ public class HomeworkService {
 	 * 기존 숙제와 권한을 확인한 뒤 내용을 수정하고 변경 전후 이력을 저장합니다.
 	 */
 	@Transactional
-	public HomeworkResponse update(Long homeworkId, HomeworkSaveRequest request) {
+	public HomeworkResponse update(Long homeworkId, HomeworkSaveRequest request, Long actorId) {
 		HomeworkResponse existing = find(homeworkId);
-		checkAccess(existing.studentId(), request.actorId());
+		checkAccess(existing.studentId(), actorId);
 		checkDates(request.assignedDate(), request.dueDate());
 		String beforeData = repository.snapshot(homeworkId);
 		Long subjectId = repository.findOrCreateSubject(existing.studentId(), request.subject().trim());
 		repository.update(homeworkId, subjectId, request.title().trim(),
-				nullIfBlank(request.description()), request.assignedDate(), request.dueDate(), request.actorId());
-		repository.addHistory(homeworkId, "HW_UPDATED", request.actorId(), beforeData,
+				nullIfBlank(request.description()), request.assignedDate(), request.dueDate(), actorId);
+		repository.addHistory(homeworkId, "HW_UPDATED", actorId, beforeData,
 				repository.snapshot(homeworkId));
 		return find(homeworkId);
 	}
@@ -75,16 +79,16 @@ public class HomeworkService {
 	 * 허용된 진행률인지 검증하고 권한 확인 후 진행률과 변경 이력을 저장합니다.
 	 */
 	@Transactional
-	public HomeworkResponse updateProgress(Long homeworkId, HomeworkProgressRequest request) {
+	public HomeworkResponse updateProgress(Long homeworkId, HomeworkProgressRequest request, Long actorId) {
 		if (!ALLOWED_PROGRESS.contains(request.progress())) {
 			throw new ResponseStatusException(
 					HttpStatus.BAD_REQUEST, "진행률은 0, 25, 50, 75, 100 중 하나여야 합니다.");
 		}
 		HomeworkResponse existing = find(homeworkId);
-		checkAccess(existing.studentId(), request.actorId());
+		checkAccess(existing.studentId(), actorId);
 		String beforeData = repository.snapshot(homeworkId);
-		repository.updateProgress(homeworkId, request.progress(), request.actorId());
-		repository.addHistory(homeworkId, "HW_PROGRESS_UPDATED", request.actorId(), beforeData,
+		repository.updateProgress(homeworkId, request.progress(), actorId);
+		repository.addHistory(homeworkId, "HW_PROGRESS_UPDATED", actorId, beforeData,
 				repository.snapshot(homeworkId));
 		return find(homeworkId);
 	}
@@ -97,9 +101,7 @@ public class HomeworkService {
 
 	/** 작업자에게 학생 숙제 변경 권한이 없으면 API의 403 오류를 발생시킵니다. */
 	private void checkAccess(Long studentId, Long actorId) {
-		if (!repository.canManage(studentId, actorId)) {
-			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "해당 학생의 숙제를 변경할 권한이 없습니다.");
-		}
+		accessService.checkCanManage(studentId, actorId);
 	}
 
 	/** 마감일이 숙제 배정일보다 빠른 잘못된 날짜 조합을 거부합니다. */

@@ -71,39 +71,6 @@ public class HomeworkRepository {
 	}
 
 	/**
-	 * 작업자가 학생 본인이거나 승인된 연결 학부모인지 확인합니다.
-	 *
-	 * @param studentId 관리 대상 학생 ID
-	 * @param actorId 변경을 시도한 사용자 ID
-	 * @return 숙제 변경 권한이 있으면 {@code true}
-	 */
-	public boolean canManage(Long studentId, Long actorId) {
-		return jdbcClient.sql("""
-				SELECT EXISTS (
-				    SELECT 1
-				    FROM users actor
-				    JOIN common_codes actor_role ON actor_role.id = actor.role_code_id
-				    WHERE actor.id = :actorId
-				      AND (
-				          (actor.id = :studentId AND actor_role.code = 'ROLE_STUDENT')
-				          OR EXISTS (
-				              SELECT 1
-				              FROM parent_student_links link
-				              JOIN common_codes status_code ON status_code.id = link.status_code_id
-				              WHERE link.parent_id = actor.id
-				                AND link.student_id = :studentId
-				                AND status_code.code = 'LINK_APPROVED'
-				          )
-				      )
-				)
-				""")
-				.param("actorId", actorId)
-				.param("studentId", studentId)
-				.query(Boolean.class)
-				.single();
-	}
-
-	/**
 	 * 학생에게 같은 이름의 과목이 있으면 재사용하고, 없으면 사용자 정의 과목을 생성합니다.
 	 *
 	 * @param studentId 과목 소유 학생 ID

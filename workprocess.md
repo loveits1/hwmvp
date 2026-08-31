@@ -612,3 +612,51 @@ Spring Boot 4.1 및 Java 21과 호환되는 MyBatis Spring Boot Starter 4.1 계�
 
 - `node --check src/main/resources/static/js/app.js`로 JavaScript 문법을 검사했습니다.
 - `git diff --check`로 변경 파일의 공백 오류를 검사했습니다.
+
+## 2026-08-31 - 서버 세션 로그인 및 인증 기반 권한 처리
+
+### DB 인증 정보 추가
+
+- Flyway `V7__add_user_authentication.sql`에서 `users` 테이블에 비밀번호 해시, 계정 활성 여부, 로그인 실패 횟수, 잠금 종료 시각 및 마지막 로그인 시각을 추가했습니다.
+- 기존 테스트 사용자에는 BCrypt로 해시한 공통 초기 비밀번호 `test1234!`를 설정했습니다.
+- 로그인에 5회 연속 실패하면 계정을 15분 동안 잠그고, 성공하면 실패 횟수와 잠금 상태를 초기화하도록 구성했습니다.
+- 실제 PostgreSQL `managehw` 스키마에 V7을 적용해 스키마 버전 7을 확인했습니다.
+
+### Spring Security 서버 세션 인증
+
+- Spring Security 의존성과 `SecurityFilterChain`, BCrypt `PasswordEncoder`, DB 기반 `UserDetailsService`를 추가했습니다.
+- `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/csrf` API를 구현했습니다.
+- 로그인 성공 시 인증 주체를 HTTP 세션에 저장하고 세션 ID를 변경해 세션 고정 공격을 방지합니다.
+- 세션 쿠키에 HttpOnly, SameSite=Lax 및 30분 만료 설정을 적용했습니다. 운영 HTTPS에서는 `SESSION_COOKIE_SECURE=true`를 사용합니다.
+- 상태 변경 요청은 CSRF 토큰을 검증하고, 미인증 요청은 HTTP 401로 처리합니다.
+
+### API 권한 경계 변경
+
+- 브라우저 요청 DTO와 쿼리 파라미터에서 신뢰할 수 없던 `actorId`를 제거했습니다.
+- 숙제 등록·수정·삭제·진행률 변경 작업자는 서버 세션의 인증 사용자 ID로만 결정합니다.
+- 숙제와 과목 조회에도 학생 본인 또는 승인된 연결 학부모 권한 검사를 추가했습니다.
+- 권한이 없는 다른 학생 ID 요청은 HTTP 403으로 차단합니다.
+
+### 로그인 UI 및 사용자 전환
+
+- 테스트 사용자 카드 선택 화면을 로그인 ID와 비밀번호 입력 화면으로 교체했습니다.
+- 학생 로그인 시 본인 숙제 화면으로, 학부모 로그인 시 승인된 연결 학생의 숙제 화면으로 이동합니다.
+- 사용자 전환은 기존 서버 세션을 로그아웃한 후 로그인 화면에서 다른 계정으로 다시 인증하도록 변경했습니다.
+- 브라우저 `sessionStorage` 사용자 복원을 제거하고 새로고침 시 `/api/auth/me`로 서버 세션을 확인합니다.
+- JavaScript의 POST·PATCH·DELETE 요청에 서버가 발급한 CSRF 토큰을 자동으로 포함합니다.
+
+### 검증 결과
+
+- Maven 컴파일, JavaScript 문법 검사와 `git diff --check`를 통과했습니다.
+- 학생 계정 로그인과 세션 복원, 본인 숙제 조회 HTTP 200을 확인했습니다.
+- 학생이 다른 학생 숙제를 조회하면 HTTP 403, 로그아웃 후 현재 사용자 조회는 HTTP 401임을 확인했습니다.
+- 학부모 계정에서 승인된 연결 학생 과목은 HTTP 200, 연결되지 않은 학생 과목은 HTTP 403임을 확인했습니다.
+- 전체 테스트는 로컬 Docker 데몬이 없어 Testcontainers PostgreSQL을 시작하지 못해 완료하지 못했습니다.
+
+## 2026-08-31 - 인증 패키지 구조 정리
+
+- 다른 기능 패키지와 구조를 통일하기 위해 `auth` 루트에 있던 클래스를 역할별로 재배치했습니다.
+- 보안 설정은 `auth/config`, 인증 DTO와 세션 사용자 모델은 `auth/dto`에 배치했습니다.
+- DB 조회는 `auth/repository`, 사용자 인증 조회 서비스는 `auth/service`, 인증 API는 `auth/web`으로 분리했습니다.
+- 숙제와 과목 Controller의 인증 사용자 import를 새 패키지 경로로 변경했습니다.
+- Maven 컴파일과 `git diff --check`를 통과했습니다.

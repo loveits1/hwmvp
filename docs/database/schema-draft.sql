@@ -30,6 +30,11 @@ CREATE TABLE users (
     role_code_id bigint NOT NULL,
     name varchar(100) NOT NULL,
     login_id varchar(100) NOT NULL,
+    password_hash varchar(100) NOT NULL,
+    is_enabled boolean NOT NULL DEFAULT true,
+    failed_login_count integer NOT NULL DEFAULT 0,
+    locked_until timestamptz,
+    last_login_at timestamptz,
     region_code_id bigint,
     created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -38,7 +43,9 @@ CREATE TABLE users (
     CONSTRAINT fk_users_region_code FOREIGN KEY (region_code_id)
         REFERENCES common_codes (id) ON DELETE RESTRICT,
     CONSTRAINT ck_users_name_not_blank CHECK (btrim(name) <> ''),
-    CONSTRAINT ck_users_login_id_not_blank CHECK (btrim(login_id) <> '')
+    CONSTRAINT ck_users_login_id_not_blank CHECK (btrim(login_id) <> ''),
+    CONSTRAINT ck_users_password_hash_not_blank CHECK (btrim(password_hash) <> ''),
+    CONSTRAINT ck_users_failed_login_count CHECK (failed_login_count >= 0)
 );
 
 CREATE UNIQUE INDEX uq_users_login_id_ci ON users (lower(login_id));
@@ -165,6 +172,11 @@ COMMENT ON COLUMN users.id IS '사용자 식별자';
 COMMENT ON COLUMN users.role_code_id IS '역할코드 식별자 - 부모 또는 학생';
 COMMENT ON COLUMN users.name IS '사용자명';
 COMMENT ON COLUMN users.login_id IS '로그인 아이디';
+COMMENT ON COLUMN users.password_hash IS 'BCrypt 비밀번호 해시';
+COMMENT ON COLUMN users.is_enabled IS '로그인 가능 여부';
+COMMENT ON COLUMN users.failed_login_count IS '연속 로그인 실패 횟수';
+COMMENT ON COLUMN users.locked_until IS '계정 잠금 종료 시각';
+COMMENT ON COLUMN users.last_login_at IS '마지막 로그인 성공 시각';
 COMMENT ON COLUMN users.region_code_id IS '지역코드 식별자 - 법정동 앞 5자리 공통코드';
 COMMENT ON COLUMN users.created_at IS '생성일시';
 COMMENT ON COLUMN users.updated_at IS '수정일시';

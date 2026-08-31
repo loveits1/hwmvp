@@ -1,10 +1,7 @@
-// 브라우저 세션에서 마지막으로 선택한 사용자를 복원할 때 사용하는 키입니다.
-const SESSION_KEY = "haru-user-v1";
 // 날짜 비교 시 시각의 영향을 받지 않도록 오늘을 자정 기준으로 고정합니다.
 const today = startOfDay(new Date());
-
-// API에서 조회한 테스트 사용자를 역할별 선택 목록으로 관리합니다.
-const users = { student: [], parent: [] };
+let csrfHeaderName = "X-CSRF-TOKEN";
+let csrfToken = "";
 
 // 숙제 상태별 표시 문구와 강조색을 한곳에서 관리해 요약 카드와 목록의 표현을 통일합니다.
 const statusInfo = {
@@ -19,8 +16,6 @@ const subjectIcons = { 국어: "가", 영어: "A", 수학: "＋", 과학: "⚗",
 
 // 여러 화면이 공유하는 사용자 선택, 필터, 로딩, 폼 상태를 단일 객체에서 관리합니다.
 const state = {
-  role: "student",
-  selectedUser: null,
   currentUser: null,
   selectedDate: today,
   weekStart: startOfWeek(today),
@@ -28,8 +23,6 @@ const state = {
   subjectFilter: "all",
   selectedSubject: "",
   subjects: [],
-  usersLoading: true,
-  usersError: false,
   subjectsLoading: false,
   homeworkLoading: false,
   homeworkError: false,
@@ -43,7 +36,7 @@ const state = {
 
 const $ = selector => document.querySelector(selector);
 // 화면 전환 시 표시할 최상위 영역을 이름으로 조회할 수 있도록 보관합니다.
-const screens = { user: $("#userScreen"), dashboard: $("#dashboardScreen"), form: $("#formScreen") };
+const screens = { login: $("#loginScreen"), dashboard: $("#dashboardScreen"), form: $("#formScreen") };
 
 // 달력 계산과 API 날짜 문자열 변환에 사용하는 공통 유틸리티입니다.
 function startOfDay(date) { const value = new Date(date); value.setHours(0, 0, 0, 0); return value; }
@@ -53,7 +46,6 @@ function isoDate(date) { return [date.getFullYear(), String(date.getMonth() + 1)
 function parseDate(value) { const [year, month, day] = value.split("-").map(Number); return new Date(year, month - 1, day); }
 function sameDay(a, b) { return isoDate(a) === isoDate(b); }
 function studentDatabaseId() { return state.currentUser?.role === "student" ? state.currentUser.databaseId : state.currentUser?.studentDatabaseId; }
-function actorDatabaseId() { return state.currentUser?.databaseId; }
 function studentName() { return state.currentUser?.role === "student" ? state.currentUser.name : state.currentUser?.studentName; }
 // 진행률을 우선 적용하고, 미완료 숙제는 마감일과 오늘을 비교해 화면 상태를 결정합니다.
 function statusOf(item) {
@@ -79,42 +71,45 @@ function showToast(message) {
 
 // 모든 JSON API 요청의 헤더, 오류 처리, 204 응답 처리를 공통화합니다.
 async function requestJson(url, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
   const response = await fetch(url, {
     ...options,
-    headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers }
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(!["GET", "HEAD", "OPTIONS"].includes(method) && csrfToken ? { [csrfHeaderName]: csrfToken } : {}),
+      ...options.headers
+    }
   });
-  if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(`API request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return response.status === 204 ? null : response.json();
 }
 
-// 서버 응답을 화면에서 공통으로 사용할 사용자 구조로 변환하고 DB ID를 숫자로 통일합니다.
+// 인증 API 응답을 대시보드가 사용하는 사용자 구조로 변환하고 DB ID를 숫자로 통일합니다.
 function normalizeUser(user) {
   if (user.role === "student") {
-    return { id: user.loginId, databaseId: Number(user.id), role: user.role, name: user.name, parentName: user.parentName };
+    return { id: user.loginId, databaseId: Number(user.id), role: user.role, name: user.name };
   }
   return {
     id: user.loginId,
     databaseId: Number(user.id),
     role: user.role,
     name: user.name,
-    studentId: user.student?.loginId,
     studentDatabaseId: user.student?.id == null ? null : Number(user.student.id),
     studentName: user.student?.name
   };
 }
 
-// 사용자 선택 화면에 필요한 학생·학부모 목록을 조회하고 로딩 및 재시도 상태를 갱신합니다.
-async function loadUsers() {
-  state.usersLoading = true; state.usersError = false; state.selectedUser = null; renderUsers();
-  try {
-    const loadedUsers = await requestJson("/api/test-users");
-    users.student = loadedUsers.filter(user => user.role === "student").map(normalizeUser);
-    users.parent = loadedUsers.filter(user => user.role === "parent").map(normalizeUser);
-  } catch {
-    users.student = []; users.parent = []; state.usersError = true;
-  } finally {
-    state.usersLoading = false; renderUsers();
-  }
+// 서버가 발급한 CSRF 토큰을 이후 로그인과 데이터 변경 요청에 사용합니다.
+async function loadCsrfToken() {
+  const csrf = await requestJson("/api/auth/csrf");
+  csrfHeaderName = csrf.headerName;
+  csrfToken = csrf.token;
 }
 
 // 현재 관리 대상 학생의 과목을 조회해 필터와 등록·수정 폼에서 함께 사용합니다.
@@ -163,45 +158,10 @@ function moveToNearestHomeworkDate() {
   state.weekStart = startOfWeek(nearestDate);
 }
 
-// 역할별 사용자 카드와 선택 가능 여부를 현재 조회 상태에 맞춰 다시 그립니다.
-function renderUsers() {
-  document.querySelectorAll(".role-tab").forEach(button => {
-    const active = button.dataset.role === state.role;
-    button.classList.toggle("active", active); button.setAttribute("aria-selected", String(active));
-  });
-  if (state.usersLoading) {
-    $("#userList").innerHTML = '<div class="empty-state"><h3>사용자 정보를 불러오는 중이에요.</h3><p>잠시만 기다려 주세요.</p></div>';
-    $("#startButton").disabled = true; $("#startButton").textContent = "불러오는 중...";
-    return;
-  }
-  if (state.usersError) {
-    $("#userList").innerHTML = '<div class="empty-state"><h3>사용자 정보를 불러오지 못했어요.</h3><p>서버 연결을 확인하고 다시 시도해 주세요.</p><button class="secondary-button" type="button" data-retry-users>다시 시도</button></div>';
-    $("#startButton").disabled = true; $("#startButton").textContent = "사용자를 선택해 주세요";
-    return;
-  }
-  if (!users[state.role].length) {
-    $("#userList").innerHTML = '<div class="empty-state"><h3>선택할 수 있는 테스트 사용자가 없어요.</h3></div>';
-  } else $("#userList").innerHTML = users[state.role].map(user => {
-    const selected = state.selectedUser?.id === user.id;
-    const detail = user.role === "student" ? `학부모 · ${user.parentName || "연결 정보 없음"}` : `연결 학생 · ${user.studentName || "연결 정보 없음"}`;
-    return `<button class="user-card ${selected ? "selected" : ""}" type="button" role="radio" aria-checked="${selected}" data-user-id="${user.id}">
-      <span class="user-avatar">${escapeHtml(user.name[0])}</span>
-      <span class="user-card-copy"><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(detail)}</small></span>
-      <span class="radio-mark" aria-hidden="true">${selected ? "●" : "○"}</span>
-    </button>`;
-  }).join("");
-  const hasManagedStudent = state.selectedUser?.role !== "parent" || Boolean(state.selectedUser.studentDatabaseId);
-  $("#startButton").disabled = !state.selectedUser || !hasManagedStudent;
-  $("#startButton").textContent = !state.selectedUser
-    ? "사용자를 선택해 주세요"
-    : hasManagedStudent
-      ? `${state.role === "student" ? "학생" : "학부모"}으로 시작`
-      : "연결된 학생이 없습니다";
-}
-
 // 선택한 사용자 세션을 시작하고 학생 또는 연결 학생 기준의 대시보드 데이터를 불러옵니다.
 function enterDashboard(user) {
-  state.currentUser = user; sessionStorage.setItem(SESSION_KEY, user.id);
+  state.currentUser = normalizeUser(user);
+  user = state.currentUser;
   state.selectedDate = today; state.weekStart = startOfWeek(today); state.statusFilter = "all"; state.subjectFilter = "all";
   $("#profileName").textContent = user.name;
   $("#profileContext").textContent = user.role === "student" ? "학생" : `${user.studentName} 학생의 숙제`;
@@ -329,7 +289,7 @@ async function updateHomeworkProgress(homeworkId, progress) {
   try {
     const updated = await requestJson(`/api/homeworks/${homeworkId}/progress`, {
       method: "PATCH",
-      body: JSON.stringify({ progress, actorId: actorDatabaseId() })
+      body: JSON.stringify({ progress })
     });
     const index = state.homework.findIndex(item => item.id === homeworkId);
     if (index >= 0) state.homework[index] = updated;
@@ -394,12 +354,7 @@ function attemptLeaveForm() {
 
 // 동적으로 다시 생성되는 카드와 메뉴를 처리하기 위해 문서 수준에서 클릭 이벤트를 위임합니다.
 document.addEventListener("click", event => {
-  if (event.target.closest("[data-retry-users]")) loadUsers();
   if (event.target.closest("[data-retry-homework]")) loadHomeworks();
-  const role = event.target.closest("[data-role]")?.dataset.role;
-  if (role) { state.role = role; state.selectedUser = null; renderUsers(); }
-  const userId = event.target.closest("[data-user-id]")?.dataset.userId;
-  if (userId) { state.selectedUser = users[state.role].find(user => user.id === userId); renderUsers(); }
   const dateValue = event.target.closest("[data-date]")?.dataset.date;
   if (dateValue) { state.selectedDate = parseDate(dateValue); state.statusFilter = "all"; renderDashboard(); closeSidebar(); }
   const status = event.target.closest("[data-status]")?.dataset.status;
@@ -452,7 +407,40 @@ document.addEventListener("keydown", event => {
   document.querySelectorAll(".progress-menu,.card-action-menu").forEach(element => element.classList.add("hidden"));
   document.querySelectorAll("[data-progress-menu-id],.card-menu-button").forEach(button => button.setAttribute("aria-expanded", "false"));
 });
-$("#startButton").addEventListener("click", () => state.selectedUser && enterDashboard(state.selectedUser));
+$("#loginForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const loginId = $("#loginIdInput").value.trim();
+  const password = $("#passwordInput").value;
+  const error = $("#loginError");
+  const button = $("#loginButton");
+  error.classList.add("hidden");
+  if (!loginId || !password) {
+    error.textContent = "로그인 ID와 비밀번호를 모두 입력해 주세요.";
+    error.classList.remove("hidden");
+    return;
+  }
+  button.disabled = true; button.textContent = "로그인 중...";
+  try {
+    const user = await requestJson("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ loginId, password })
+    });
+    if (user.role === "parent" && !user.student) {
+      await requestJson("/api/auth/logout", { method: "POST" });
+      throw new Error("managed-student-missing");
+    }
+    $("#loginForm").reset();
+    enterDashboard(user);
+  } catch (requestError) {
+    error.textContent = requestError.message === "managed-student-missing"
+      ? "승인된 연결 학생이 없어 숙제 화면을 열 수 없습니다."
+      : "로그인 ID 또는 비밀번호가 올바르지 않습니다.";
+    error.classList.remove("hidden");
+    $("#passwordInput").focus();
+  } finally {
+    button.disabled = false; button.textContent = "로그인";
+  }
+});
 $("#subjectFilter").addEventListener("change", event => { state.subjectFilter = event.target.value; renderHomework(); });
 $("#prevWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); state.selectedDate = state.weekStart; renderDashboard(); });
 $("#nextWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); state.selectedDate = state.weekStart; renderDashboard(); });
@@ -464,7 +452,15 @@ $("#scrim").addEventListener("click", closeSidebar);
 // 모바일 사이드바와 배경 가림막을 함께 닫아 표시 상태가 어긋나지 않게 합니다.
 function closeSidebar() { $("#sidebar").classList.remove("open"); $("#scrim").classList.remove("show"); }
 $("#profileButton").addEventListener("click", () => { const menu = $("#profileMenu"); menu.classList.toggle("hidden"); $("#profileButton").setAttribute("aria-expanded", String(!menu.classList.contains("hidden"))); });
-$("#changeUserButton").addEventListener("click", () => { state.currentUser = null; state.selectedUser = null; sessionStorage.removeItem(SESSION_KEY); $("#profileMenu").classList.add("hidden"); renderUsers(); showScreen("user"); });
+$("#changeUserButton").addEventListener("click", async () => {
+  try {
+    await requestJson("/api/auth/logout", { method: "POST" });
+  } finally {
+    state.currentUser = null; state.homework = []; state.subjects = [];
+    $("#profileMenu").classList.add("hidden");
+    showScreen("login"); $("#loginIdInput").focus();
+  }
+});
 $("#backButton").addEventListener("click", attemptLeaveForm);
 $("#cancelButton").addEventListener("click", attemptLeaveForm);
 $("#keepEditingButton").addEventListener("click", () => $("#dialogBackdrop").classList.add("hidden"));
@@ -474,7 +470,7 @@ $("#confirmDeleteButton").addEventListener("click", async () => {
   const homeworkId = state.deleteTargetId;
   $("#confirmDeleteButton").disabled = true;
   try {
-    await requestJson(`/api/homeworks/${homeworkId}?actorId=${actorDatabaseId()}`, { method: "DELETE" });
+    await requestJson(`/api/homeworks/${homeworkId}`, { method: "DELETE" });
     state.deleteTargetId = null; $("#deleteDialogBackdrop").classList.add("hidden");
     await loadHomeworks(); showToast("숙제를 삭제했어요.");
   } catch {
@@ -491,7 +487,7 @@ $("#homeworkForm").addEventListener("submit", async event => {
   try {
     const subject = state.selectedSubject === "기타" ? $("#customSubject").value.trim() : state.selectedSubject;
     const homeworkId = state.editingId;
-    const payload = JSON.stringify({ subject, title: $("#titleInput").value.trim(), description: $("#descriptionInput").value.trim(), assignedDate: $("#assignedDateInput").value, dueDate: $("#dueDateInput").value, actorId: actorDatabaseId() });
+    const payload = JSON.stringify({ subject, title: $("#titleInput").value.trim(), description: $("#descriptionInput").value.trim(), assignedDate: $("#assignedDateInput").value, dueDate: $("#dueDateInput").value });
     const url = homeworkId ? `/api/homeworks/${homeworkId}` : `/api/students/${studentDatabaseId()}/homeworks`;
     await requestJson(url, { method: homeworkId ? "PATCH" : "POST", body: payload });
     state.selectedDate = parseDate($("#assignedDateInput").value); state.weekStart = startOfWeek(state.selectedDate); state.formDirty = false; state.editingId = null;
@@ -502,12 +498,19 @@ $("#homeworkForm").addEventListener("submit", async event => {
   } finally { button.disabled = false; if (!screens.form.classList.contains("hidden")) button.textContent = state.editingId ? "수정 내용 저장" : "숙제 저장"; }
 });
 
-// 최초 사용자 목록을 불러온 뒤 세션에 저장된 사용자가 있으면 대시보드로 복원합니다.
+// CSRF 토큰을 준비하고 서버 세션에 로그인된 사용자가 있으면 대시보드로 복원합니다.
 async function initialize() {
-  renderUsers(); await loadUsers();
-  const savedUserId = sessionStorage.getItem(SESSION_KEY);
-  const savedUser = Object.values(users).flat().find(user => user.id === savedUserId);
-  if (savedUser) enterDashboard(savedUser);
+  try {
+    await loadCsrfToken();
+    const user = await requestJson("/api/auth/me");
+    enterDashboard(user);
+  } catch (error) {
+    showScreen("login");
+    if (error.status && error.status !== 401) {
+      $("#loginError").textContent = "로그인 화면을 준비하지 못했습니다. 새로고침해 주세요.";
+      $("#loginError").classList.remove("hidden");
+    }
+  }
 }
 
 initialize();
