@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<section class="screen user-screen" id="loginScreen" aria-labelledby="loginScreenTitle" th:fragment="login-screen">
+  <div class="user-hero">
+    <a class="brand" href="#" aria-label="하루숙제 시작 화면"><span class="brand-mark">✓</span><span>하루숙제</span></a>
+    <p class="eyebrow">HOMEWORK, ONE STEP AT A TIME</p>
+    <h1>하루의 숙제를<br>차근차근 끝내요</h1>
+    <p>오늘 해야 할 일을 확인하고 하나씩 완료해 보세요.</p>
+    <div class="feature-chips" aria-label="서비스 특징">
+      <span>쉬운 일정 관리</span><span>한눈에 보는 진행률</span><span>학생·학부모 함께</span>
+    </div>
+  </div>
+  <div class="user-panel">
+    <header>
+      <h2 id="loginScreenTitle">로그인</h2>
+      <p>하루숙제 계정으로 시작해 주세요.</p>
+      <span class="test-badge">테스트 계정 비밀번호 · test1234!</span>
+    </header>
+    <form class="login-form" id="loginForm" novalidate>
+      <div class="form-field">
+        <label for="loginIdInput">로그인 ID</label>
+        <input id="loginIdInput" name="loginId" type="text" maxlength="100" autocomplete="username" placeholder="예) student-1" required autofocus>
+      </div>
+      <div class="form-field">
+        <label for="passwordInput">비밀번호</label>
+        <input id="passwordInput" name="password" type="password" maxlength="200" autocomplete="current-password" placeholder="비밀번호를 입력해 주세요" required>
+      </div>
+      <p class="login-error hidden" id="loginError" role="alert"></p>
+      <button class="primary-button start-button" id="loginButton" type="submit">로그인</button>
+    </form>
+    <p class="login-help">테스트 ID: student-1, student-2, parent-1, parent-2</p>
+  </div>
+</section>
+</body>
+</html>

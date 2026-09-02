@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<section class="screen dashboard-screen hidden" id="dashboardScreen" aria-label="날짜별 숙제 메인" th:fragment="dashboard-screen">
+  <aside class="sidebar" id="sidebar" aria-label="날짜 탐색">
+    <a class="brand" href="#" id="homeBrand"><span class="brand-mark">✓</span><span>하루숙제</span></a>
+    <div class="period-heading">
+      <div><p class="eyebrow" id="yearLabel"></p><h2 id="weekLabel"></h2></div>
+      <div class="arrow-group">
+        <button class="icon-button" id="prevWeek" type="button" aria-label="이전 주">‹</button>
+        <button class="icon-button" id="nextWeek" type="button" aria-label="다음 주">›</button>
+      </div>
+    </div>
+    <nav class="date-list" id="dateList" aria-label="주간 날짜"></nav>
+    <button class="today-button" id="todayButton" type="button">▣ 오늘로 이동</button>
+    <p class="sidebar-message">차근차근 해내는 중이에요 🌱</p>
+  </aside>
+  <main class="main-content">
+    <header class="topbar">
+      <button class="mobile-menu" id="menuButton" type="button" aria-label="날짜 메뉴 열기">☰</button>
+      <div class="topbar-copy"><p class="eyebrow">HOMEWORK DASHBOARD</p><h1>오늘도 하나씩 해볼까요?</h1></div>
+      <button class="profile-button" id="profileButton" type="button" aria-expanded="false">
+        <span class="profile-copy"><strong id="profileName"></strong><small id="profileContext"></small></span>
+        <span class="avatar" id="profileAvatar"></span><span aria-hidden="true">⌄</span>
+      </button>
+      <div class="profile-menu hidden" id="profileMenu">
+        <p id="profileMenuLabel"></p><button id="changeUserButton" type="button">로그아웃 및 사용자 전환</button>
+      </div>
+    </header>
+    <div class="dashboard">
+      <section class="welcome-card" aria-labelledby="selectedDateTitle">
+        <div class="date-badge"><span id="badgeMonth"></span><strong id="badgeDay"></strong></div>
+        <div><p class="eyebrow">선택한 날짜</p><h2 id="selectedDateTitle"></h2><p id="selectedDateSummary"></p></div>
+      </section>
+      <div class="summary-grid" id="summaryGrid" aria-label="숙제 상태 필터"></div>
+      <section>
+        <div class="content-heading">
+          <div><h2>숙제 목록</h2><p id="filterDescription">선택한 날짜의 숙제를 확인해 보세요.</p></div>
+          <div class="heading-actions">
+            <label class="subject-filter"><span class="sr-only">과목 필터</span><select id="subjectFilter"><option value="all">전체 과목</option></select></label>
+            <button class="primary-button add-button" id="addButton" type="button">＋ 숙제 추가</button>
+          </div>
+        </div>
+        <div class="homework-list" id="homeworkList" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+</section>
+</body>
+</html>

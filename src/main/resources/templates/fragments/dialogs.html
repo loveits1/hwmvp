@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="shared-dialogs">
+  <div class="scrim" id="scrim"></div>
+  <div class="dialog-backdrop hidden" id="dialogBackdrop">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+      <h2 id="dialogTitle">작성 중인 내용을 취소할까요?</h2><p>입력한 내용은 저장되지 않아요.</p>
+      <div><button class="secondary-button" id="keepEditingButton" type="button">계속 작성</button><button class="danger-button" id="discardButton" type="button">작성 취소</button></div>
+    </div>
+  </div>
+  <div class="dialog-backdrop hidden" id="deleteDialogBackdrop">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle">
+      <h2 id="deleteDialogTitle">이 숙제를 삭제할까요?</h2><p id="deleteDialogDescription">삭제한 숙제는 다시 되돌릴 수 없어요.</p>
+      <div><button class="secondary-button" id="cancelDeleteButton" type="button">취소</button><button class="danger-button" id="confirmDeleteButton" type="button">숙제 삭제</button></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</th:block>
+</body>
+</html>

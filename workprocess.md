@@ -210,6 +210,7 @@ GET /api/students/{studentId}/subjects
 
 - `node --check src/main/resources/static/js/app.js`로 JavaScript 문법 검사를 통과했습니다.
 - Maven 컴파일과 `git diff --check`를 통과했습니다.
+
 - PostgreSQL 연결 상태에서 화면 HTML, `app.js`, 사용자 API, 과목 API가 모두 HTTP 200으로 반환되는 것을 확인했습니다.
 - 검증용 18081 포트 애플리케이션은 확인 후 정상 종료했습니다.
 
@@ -660,3 +661,50 @@ Spring Boot 4.1 및 Java 21과 호환되는 MyBatis Spring Boot Starter 4.1 계�
 - DB 조회는 `auth/repository`, 사용자 인증 조회 서비스는 `auth/service`, 인증 API는 `auth/web`으로 분리했습니다.
 - 숙제와 과목 Controller의 인증 사용자 import를 새 패키지 경로로 변경했습니다.
 - Maven 컴파일과 `git diff --check`를 통과했습니다.
+
+## 2026-08-31 - 현재 구현 및 향후 개발 로직 문서 갱신
+
+- `job_desc.md`의 로그인, 사용자 전환, API와 권한 설명을 현재 서버 세션 구현 기준으로 변경했습니다.
+- DB 인증 컬럼, 로그인 실패 잠금, CSRF, 세션 복원과 인증 사용자 기반 작업자 결정 상태를 반영했습니다.
+- 현재 구현 완료 기능을 영역별 요약표로 정리했습니다.
+- 회원가입, 마이페이지, 학생·학부모 관계 설정, 연결 없는 학부모 안내와 다중 학생 선택을 미구현·구현 예정 기능으로 분리했습니다.
+- 각 예정 기능의 처리 흐름, 예정 API, 선행 조건과 착수 전 정책 결정 항목을 기록했습니다.
+- 문서의 기존 업무 규칙과 현재 코드 상태가 충돌하는 표현을 교차 검토했습니다.
+
+## 2026-09-02 - 화면별 HTML 및 JavaScript 모듈 분리
+
+### 작업 목적
+
+- 하나의 `index.html`과 `app.js`에 집중된 화면 마크업과 이벤트 처리를 화면 단위로 분리했습니다.
+- 기존 단일 페이지 전환 방식과 DOM ID, CSS 및 서버 API 계약은 유지했습니다.
+
+### HTML 구조 변경
+
+- `index.html`은 공통 문서 구조와 Thymeleaf fragment 조립만 담당하도록 축소했습니다.
+- 로그인, 대시보드, 숙제 등록·수정 화면을 각각 `fragments/login.html`, `fragments/dashboard.html`, `fragments/homework-form.html`로 분리했습니다.
+- 화면들이 함께 사용하는 작성 취소·삭제 확인 대화상자, 모바일 가림막과 토스트를 `fragments/dialogs.html`로 분리했습니다.
+
+### JavaScript 구조 변경
+
+- 브라우저 진입점인 `app.js`를 ES module로 변경했습니다.
+- API 및 CSRF 처리를 `api.js`, 공유 화면 상태를 `state.js`, DOM·날짜·이스케이프 함수를 `utils.js`로 분리했습니다.
+- 로그인, 대시보드, 숙제 폼 이벤트를 `screens/login.js`, `screens/dashboard.js`, `screens/homework-form.js`로 분리했습니다.
+- 화면 모듈은 초기화 함수에서 이벤트를 한 번만 등록하고, `app.js`가 필요한 작업 함수를 전달하도록 구성했습니다.
+
+### 파일 역할 문서화
+
+- `job_desc.md`의 `프런트엔드 화면 및 모듈 구조` 절에 분리 원칙과 HTML·JavaScript 파일별 책임을 기록했습니다.
+- 업무 로직 정의와 작업 이력을 구분하기 위해 구조의 현재 기준은 `job_desc.md`, 실제 수행 내용과 검증 결과는 이 문서에 기록했습니다.
+
+### 검증
+
+```bash
+node --check src/main/resources/static/js/*.js
+node --check src/main/resources/static/js/screens/*.js
+./mvnw -q -DskipTests compile
+git diff --check
+```
+
+- 모든 JavaScript 모듈의 문법 검사를 통과했습니다.
+- Maven 컴파일로 Thymeleaf fragment를 포함한 리소스 패키징과 Java 소스 컴파일을 확인했습니다.
+- 변경 파일에서 공백 오류가 없음을 확인했습니다.

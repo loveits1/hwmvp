@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
 
 <head>
   <meta charset="UTF-8">
@@ -16,178 +16,13 @@
 
 <body>
   <div id="app">
-    <section class="screen user-screen" id="loginScreen" aria-labelledby="loginScreenTitle">
-      <div class="user-hero">
-        <a class="brand" href="#" aria-label="하루숙제 시작 화면"><span class="brand-mark">✓</span><span>하루숙제</span></a>
-        <p class="eyebrow">HOMEWORK, ONE STEP AT A TIME</p>
-        <h1>하루의 숙제를<br>차근차근 끝내요</h1>
-        <p>오늘 해야 할 일을 확인하고 하나씩 완료해 보세요.</p>
-        <div class="feature-chips" aria-label="서비스 특징">
-          <span>쉬운 일정 관리</span><span>한눈에 보는 진행률</span><span>학생·학부모 함께</span>
-        </div>
-      </div>
-      <div class="user-panel">
-        <header>
-          <h2 id="loginScreenTitle">로그인</h2>
-          <p>하루숙제 계정으로 시작해 주세요.</p>
-          <span class="test-badge">테스트 계정 비밀번호 · test1234!</span>
-        </header>
-        <form class="login-form" id="loginForm" novalidate>
-          <div class="form-field">
-            <label for="loginIdInput">로그인 ID</label>
-            <input id="loginIdInput" name="loginId" type="text" maxlength="100" autocomplete="username"
-              placeholder="예) student-1" required autofocus>
-          </div>
-          <div class="form-field">
-            <label for="passwordInput">비밀번호</label>
-            <input id="passwordInput" name="password" type="password" maxlength="200"
-              autocomplete="current-password" placeholder="비밀번호를 입력해 주세요" required>
-          </div>
-          <p class="login-error hidden" id="loginError" role="alert"></p>
-          <button class="primary-button start-button" id="loginButton" type="submit">로그인</button>
-        </form>
-        <p class="login-help">테스트 ID: student-1, student-2, parent-1, parent-2</p>
-      </div>
-    </section>
-
-    <section class="screen dashboard-screen hidden" id="dashboardScreen" aria-label="날짜별 숙제 메인">
-      <aside class="sidebar" id="sidebar" aria-label="날짜 탐색">
-        <a class="brand" href="#" id="homeBrand"><span class="brand-mark">✓</span><span>하루숙제</span></a>
-        <div class="period-heading">
-          <div>
-            <p class="eyebrow" id="yearLabel"></p>
-            <h2 id="weekLabel"></h2>
-          </div>
-          <div class="arrow-group">
-            <button class="icon-button" id="prevWeek" type="button" aria-label="이전 주">‹</button>
-            <button class="icon-button" id="nextWeek" type="button" aria-label="다음 주">›</button>
-          </div>
-        </div>
-        <nav class="date-list" id="dateList" aria-label="주간 날짜"></nav>
-        <button class="today-button" id="todayButton" type="button">▣ 오늘로 이동</button>
-        <p class="sidebar-message">차근차근 해내는 중이에요 🌱</p>
-      </aside>
-
-      <main class="main-content">
-        <header class="topbar">
-          <button class="mobile-menu" id="menuButton" type="button" aria-label="날짜 메뉴 열기">☰</button>
-          <div class="topbar-copy">
-            <p class="eyebrow">HOMEWORK DASHBOARD</p>
-            <h1>오늘도 하나씩 해볼까요?</h1>
-          </div>
-          <button class="profile-button" id="profileButton" type="button" aria-expanded="false">
-            <span class="profile-copy"><strong id="profileName"></strong><small id="profileContext"></small></span>
-            <span class="avatar" id="profileAvatar"></span><span aria-hidden="true">⌄</span>
-          </button>
-          <div class="profile-menu hidden" id="profileMenu">
-            <p id="profileMenuLabel"></p><button id="changeUserButton" type="button">로그아웃 및 사용자 전환</button>
-          </div>
-        </header>
-
-        <div class="dashboard">
-          <section class="welcome-card" aria-labelledby="selectedDateTitle">
-            <div class="date-badge"><span id="badgeMonth"></span><strong id="badgeDay"></strong></div>
-            <div>
-              <p class="eyebrow">선택한 날짜</p>
-              <h2 id="selectedDateTitle"></h2>
-              <p id="selectedDateSummary"></p>
-            </div>
-          </section>
-          <div class="summary-grid" id="summaryGrid" aria-label="숙제 상태 필터"></div>
-          <section>
-            <div class="content-heading">
-              <div>
-                <h2>숙제 목록</h2>
-                <p id="filterDescription">선택한 날짜의 숙제를 확인해 보세요.</p>
-              </div>
-              <div class="heading-actions">
-                <label class="subject-filter"><span class="sr-only">과목 필터</span><select id="subjectFilter">
-                    <option value="all">전체 과목</option>
-                  </select></label>
-                <button class="primary-button add-button" id="addButton" type="button">＋ 숙제 추가</button>
-              </div>
-            </div>
-            <div class="homework-list" id="homeworkList" aria-live="polite"></div>
-          </section>
-        </div>
-      </main>
-    </section>
-
-    <section class="screen form-screen hidden" id="formScreen" aria-labelledby="formTitle">
-      <header class="form-header">
-        <button class="icon-button back-button" id="backButton" type="button" aria-label="숙제 목록으로 돌아가기">‹</button>
-        <div>
-          <h1 id="formTitle">숙제 등록</h1>
-          <p>새로운 숙제를 추가해 보세요.</p>
-        </div>
-      </header>
-	      <form class="homework-form" id="homeworkForm" novalidate>
-	        <div class="form-context">
-	          <div class="target-student"><span>대상 학생</span><strong id="targetStudent"></strong></div>
-	          <div class="assigned-date-field">
-	            <label for="assignedDateInput">숙제 선택일 <span aria-hidden="true">*</span></label>
-	            <input id="assignedDateInput" name="assignedDate" type="date" aria-describedby="assignedDateError">
-	            <small class="field-error" id="assignedDateError"></small>
-	          </div>
-	        </div>
-        <fieldset>
-          <legend>과목 <span aria-hidden="true">*</span></legend>
-          <div class="subject-options" id="subjectOptions"></div>
-          <div class="form-field hidden" id="customSubjectField">
-            <label for="customSubject">기타 과목명 <span aria-hidden="true">*</span></label>
-            <input id="customSubject" name="customSubject" type="text" maxlength="30" placeholder="과목명을 입력해 주세요"
-              aria-describedby="customSubjectError">
-            <small class="field-error" id="customSubjectError"></small>
-          </div>
-          <small class="field-error" id="subjectError"></small>
-        </fieldset>
-        <div class="form-field">
-          <label for="titleInput">제목 <span aria-hidden="true">*</span></label>
-          <input id="titleInput" name="title" type="text" maxlength="200" placeholder="예) 수학 익힘책 54~57쪽 풀기"
-            aria-describedby="titleError">
-          <small class="field-error" id="titleError"></small>
-        </div>
-        <div class="form-field">
-          <div class="label-row"><label for="descriptionInput">상세내용</label><small id="descriptionCount">0 /
-              2,000자</small></div>
-          <textarea id="descriptionInput" name="description" maxlength="2000" rows="6"
-            placeholder="숙제에 필요한 내용을 자세히 입력해 주세요."></textarea>
-        </div>
-        <div class="form-field">
-	          <label for="dueDateInput">마감일 <span aria-hidden="true">*</span></label>
-	          <input id="dueDateInput" name="dueDate" type="date" aria-describedby="dueDateError">
-	          <small class="field-error" id="dueDateError"></small>
-	        </div>
-	        <p class="form-note">숙제 선택일은 달력에 표시될 날짜이고, 마감일은 숙제를 끝내야 하는 날짜예요.</p>
-	        <p class="form-note">새 숙제는 진행률 0%로 등록돼요.</p>
-        <div class="form-error hidden" id="formError" role="alert"></div>
-        <div class="form-actions">
-          <button class="secondary-button" id="cancelButton" type="button">취소</button>
-          <button class="primary-button" id="saveButton" type="submit">숙제 저장</button>
-        </div>
-      </form>
-    </section>
+    <th:block th:replace="~{fragments/login :: login-screen}"></th:block>
+    <th:block th:replace="~{fragments/dashboard :: dashboard-screen}"></th:block>
+    <th:block th:replace="~{fragments/homework-form :: homework-form-screen}"></th:block>
   </div>
 
-  <div class="scrim" id="scrim"></div>
-  <div class="dialog-backdrop hidden" id="dialogBackdrop">
-    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
-      <h2 id="dialogTitle">작성 중인 내용을 취소할까요?</h2>
-      <p>입력한 내용은 저장되지 않아요.</p>
-      <div><button class="secondary-button" id="keepEditingButton" type="button">계속 작성</button><button
-          class="danger-button" id="discardButton" type="button">작성 취소</button></div>
-    </div>
-  </div>
-  <div class="dialog-backdrop hidden" id="deleteDialogBackdrop">
-    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle">
-      <h2 id="deleteDialogTitle">이 숙제를 삭제할까요?</h2>
-      <p id="deleteDialogDescription">삭제한 숙제는 다시 되돌릴 수 없어요.</p>
-      <div><button class="secondary-button" id="cancelDeleteButton" type="button">취소</button><button
-          class="danger-button" id="confirmDeleteButton" type="button">숙제 삭제</button></div>
-    </div>
-  </div>
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/js/app.js"></script>
+  <th:block th:replace="~{fragments/dialogs :: shared-dialogs}"></th:block>
+  <script type="module" src="/js/app.js"></script>
 </body>
 
 </html>

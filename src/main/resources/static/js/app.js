@@ -1,7 +1,9 @@
-// 날짜 비교 시 시각의 영향을 받지 않도록 오늘을 자정 기준으로 고정합니다.
-const today = startOfDay(new Date());
-let csrfHeaderName = "X-CSRF-TOKEN";
-let csrfToken = "";
+import { loadCsrfToken, requestJson } from "./api.js";
+import { state, studentDatabaseId, studentName, today } from "./state.js";
+import { $, addDays, escapeHtml, isoDate, parseDate, sameDay, startOfWeek } from "./utils.js";
+import { initializeLoginScreen } from "./screens/login.js";
+import { initializeDashboardScreen } from "./screens/dashboard.js";
+import { initializeHomeworkFormScreen } from "./screens/homework-form.js";
 
 // 숙제 상태별 표시 문구와 강조색을 한곳에서 관리해 요약 카드와 목록의 표현을 통일합니다.
 const statusInfo = {
@@ -14,49 +16,14 @@ const statusInfo = {
 // 과목 카드에서 사용할 대표 문자를 정의하며, 등록되지 않은 과목은 과목명의 첫 글자를 사용합니다.
 const subjectIcons = { 국어: "가", 영어: "A", 수학: "＋", 과학: "⚗", 사회: "⌁" };
 
-// 여러 화면이 공유하는 사용자 선택, 필터, 로딩, 폼 상태를 단일 객체에서 관리합니다.
-const state = {
-  currentUser: null,
-  selectedDate: today,
-  weekStart: startOfWeek(today),
-  statusFilter: "all",
-  subjectFilter: "all",
-  selectedSubject: "",
-  subjects: [],
-  subjectsLoading: false,
-  homeworkLoading: false,
-  homeworkError: false,
-  progressSavingId: null,
-  expandedHomeworkIds: new Set(),
-  homework: [],
-  formDirty: false,
-  editingId: null,
-  deleteTargetId: null
-};
-
-const $ = selector => document.querySelector(selector);
 // 화면 전환 시 표시할 최상위 영역을 이름으로 조회할 수 있도록 보관합니다.
 const screens = { login: $("#loginScreen"), dashboard: $("#dashboardScreen"), form: $("#formScreen") };
-
-// 달력 계산과 API 날짜 문자열 변환에 사용하는 공통 유틸리티입니다.
-function startOfDay(date) { const value = new Date(date); value.setHours(0, 0, 0, 0); return value; }
-function addDays(date, days) { const value = new Date(date); value.setDate(value.getDate() + days); return value; }
-function startOfWeek(date) { const value = startOfDay(date); const day = value.getDay() || 7; return addDays(value, 1 - day); }
-function isoDate(date) { return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-"); }
-function parseDate(value) { const [year, month, day] = value.split("-").map(Number); return new Date(year, month - 1, day); }
-function sameDay(a, b) { return isoDate(a) === isoDate(b); }
-function studentDatabaseId() { return state.currentUser?.role === "student" ? state.currentUser.databaseId : state.currentUser?.studentDatabaseId; }
-function studentName() { return state.currentUser?.role === "student" ? state.currentUser.name : state.currentUser?.studentName; }
 // 진행률을 우선 적용하고, 미완료 숙제는 마감일과 오늘을 비교해 화면 상태를 결정합니다.
 function statusOf(item) {
   if (item.progress === 100) return "done";
   if (parseDate(item.dueDate) < today) return "overdue";
   if (item.progress > 0) return "doing";
   return "todo";
-}
-// 사용자 및 API 데이터를 HTML 문자열에 넣기 전에 이스케이프하여 의도하지 않은 마크업 실행을 막습니다.
-function escapeHtml(value = "") {
-  return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
 }
 // 지정한 화면만 노출하고 스크롤 위치를 초기화해 화면 전환의 시작점을 일정하게 맞춥니다.
 function showScreen(name) {
@@ -67,27 +34,6 @@ function showScreen(name) {
 function showToast(message) {
   const toast = $("#toast"); toast.textContent = message; toast.classList.add("show");
   clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove("show"), 2300);
-}
-
-// 모든 JSON API 요청의 헤더, 오류 처리, 204 응답 처리를 공통화합니다.
-async function requestJson(url, options = {}) {
-  const method = (options.method || "GET").toUpperCase();
-  const response = await fetch(url, {
-    ...options,
-    credentials: "same-origin",
-    headers: {
-      Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(!["GET", "HEAD", "OPTIONS"].includes(method) && csrfToken ? { [csrfHeaderName]: csrfToken } : {}),
-      ...options.headers
-    }
-  });
-  if (!response.ok) {
-    const error = new Error(`API request failed: ${response.status}`);
-    error.status = response.status;
-    throw error;
-  }
-  return response.status === 204 ? null : response.json();
 }
 
 // 인증 API 응답을 대시보드가 사용하는 사용자 구조로 변환하고 DB ID를 숫자로 통일합니다.
@@ -103,13 +49,6 @@ function normalizeUser(user) {
     studentDatabaseId: user.student?.id == null ? null : Number(user.student.id),
     studentName: user.student?.name
   };
-}
-
-// 서버가 발급한 CSRF 토큰을 이후 로그인과 데이터 변경 요청에 사용합니다.
-async function loadCsrfToken() {
-  const csrf = await requestJson("/api/auth/csrf");
-  csrfHeaderName = csrf.headerName;
-  csrfToken = csrf.token;
 }
 
 // 현재 관리 대상 학생의 과목을 조회해 필터와 등록·수정 폼에서 함께 사용합니다.
@@ -352,119 +291,14 @@ function attemptLeaveForm() {
   else showScreen("dashboard");
 }
 
-// 동적으로 다시 생성되는 카드와 메뉴를 처리하기 위해 문서 수준에서 클릭 이벤트를 위임합니다.
-document.addEventListener("click", event => {
-  if (event.target.closest("[data-retry-homework]")) loadHomeworks();
-  const dateValue = event.target.closest("[data-date]")?.dataset.date;
-  if (dateValue) { state.selectedDate = parseDate(dateValue); state.statusFilter = "all"; renderDashboard(); closeSidebar(); }
-  const status = event.target.closest("[data-status]")?.dataset.status;
-  if (status) { state.statusFilter = status; renderSummary(); renderHomework(); }
-  const subject = event.target.closest("[data-subject]")?.dataset.subject;
-  if (subject) { state.selectedSubject = subject; state.formDirty = true; renderSubjectOptions(); }
-  const detailId = Number(event.target.closest("[data-detail-id]")?.dataset.detailId);
-  if (detailId) {
-    if (state.expandedHomeworkIds.has(detailId)) state.expandedHomeworkIds.delete(detailId);
-    else state.expandedHomeworkIds.add(detailId);
-    renderHomework();
-  }
-  const progressMenuId = Number(event.target.closest("[data-progress-menu-id]")?.dataset.progressMenuId);
-  if (progressMenuId) {
-    const menu = document.querySelector(`[data-progress-menu="${progressMenuId}"]`);
-    const willOpen = menu.classList.contains("hidden");
-    document.querySelectorAll(".progress-menu").forEach(element => element.classList.add("hidden"));
-    document.querySelectorAll("[data-progress-menu-id]").forEach(button => button.setAttribute("aria-expanded", "false"));
-    menu.classList.toggle("hidden", !willOpen);
-    event.target.closest("[data-progress-menu-id]").setAttribute("aria-expanded", String(willOpen));
-  }
-  const progressButton = event.target.closest("[data-progress-value]");
-  if (progressButton) updateHomeworkProgress(Number(progressButton.dataset.progressId), Number(progressButton.dataset.progressValue));
-  const menuId = Number(event.target.closest("[data-menu-id]")?.dataset.menuId);
-  if (menuId) {
-    const menu = document.querySelector(`[data-action-menu="${menuId}"]`);
-    const willOpen = menu.classList.contains("hidden");
-    document.querySelectorAll(".card-action-menu").forEach(element => element.classList.add("hidden"));
-    document.querySelectorAll(".card-menu-button").forEach(button => button.setAttribute("aria-expanded", "false"));
-    document.querySelectorAll(".progress-menu").forEach(element => element.classList.add("hidden"));
-    menu.classList.toggle("hidden", !willOpen);
-    event.target.closest("[data-menu-id]").setAttribute("aria-expanded", String(willOpen));
-  }
-  const editId = Number(event.target.closest("[data-edit-id]")?.dataset.editId);
-  if (editId) openForm(state.homework.find(item => item.id === editId));
-  const deleteId = Number(event.target.closest("[data-delete-id]")?.dataset.deleteId);
-  if (deleteId) {
-    const item = state.homework.find(homework => homework.id === deleteId);
-    state.deleteTargetId = deleteId;
-    $("#deleteDialogDescription").textContent = `“${item.title}” 숙제를 삭제하면 다시 되돌릴 수 없어요.`;
-    $("#deleteDialogBackdrop").classList.remove("hidden");
-    $("#cancelDeleteButton").focus();
-  }
-  const emptyAction = event.target.closest("[data-empty-action]")?.dataset.emptyAction;
-  if (emptyAction === "reset") { state.statusFilter = "all"; state.subjectFilter = "all"; renderDashboard(); }
-  if (emptyAction === "add") openForm();
-});
-document.addEventListener("keydown", event => {
-  if (event.key !== "Escape") return;
-  document.querySelectorAll(".progress-menu,.card-action-menu").forEach(element => element.classList.add("hidden"));
-  document.querySelectorAll("[data-progress-menu-id],.card-menu-button").forEach(button => button.setAttribute("aria-expanded", "false"));
-});
-$("#loginForm").addEventListener("submit", async event => {
-  event.preventDefault();
-  const loginId = $("#loginIdInput").value.trim();
-  const password = $("#passwordInput").value;
-  const error = $("#loginError");
-  const button = $("#loginButton");
-  error.classList.add("hidden");
-  if (!loginId || !password) {
-    error.textContent = "로그인 ID와 비밀번호를 모두 입력해 주세요.";
-    error.classList.remove("hidden");
-    return;
-  }
-  button.disabled = true; button.textContent = "로그인 중...";
-  try {
-    const user = await requestJson("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ loginId, password })
-    });
-    if (user.role === "parent" && !user.student) {
-      await requestJson("/api/auth/logout", { method: "POST" });
-      throw new Error("managed-student-missing");
-    }
-    $("#loginForm").reset();
-    enterDashboard(user);
-  } catch (requestError) {
-    error.textContent = requestError.message === "managed-student-missing"
-      ? "승인된 연결 학생이 없어 숙제 화면을 열 수 없습니다."
-      : "로그인 ID 또는 비밀번호가 올바르지 않습니다.";
-    error.classList.remove("hidden");
-    $("#passwordInput").focus();
-  } finally {
-    button.disabled = false; button.textContent = "로그인";
-  }
-});
-$("#subjectFilter").addEventListener("change", event => { state.subjectFilter = event.target.value; renderHomework(); });
-$("#prevWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); state.selectedDate = state.weekStart; renderDashboard(); });
-$("#nextWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); state.selectedDate = state.weekStart; renderDashboard(); });
-$("#todayButton").addEventListener("click", () => { state.weekStart = startOfWeek(today); state.selectedDate = today; renderDashboard(); closeSidebar(); showToast("오늘 날짜로 이동했어요."); });
-$("#homeBrand").addEventListener("click", event => { event.preventDefault(); state.weekStart = startOfWeek(today); state.selectedDate = today; renderDashboard(); });
-$("#addButton").addEventListener("click", openForm);
-$("#menuButton").addEventListener("click", () => { $("#sidebar").classList.add("open"); $("#scrim").classList.add("show"); });
-$("#scrim").addEventListener("click", closeSidebar);
-// 모바일 사이드바와 배경 가림막을 함께 닫아 표시 상태가 어긋나지 않게 합니다.
-function closeSidebar() { $("#sidebar").classList.remove("open"); $("#scrim").classList.remove("show"); }
-$("#profileButton").addEventListener("click", () => { const menu = $("#profileMenu"); menu.classList.toggle("hidden"); $("#profileButton").setAttribute("aria-expanded", String(!menu.classList.contains("hidden"))); });
-$("#changeUserButton").addEventListener("click", async () => {
-  try {
-    await requestJson("/api/auth/logout", { method: "POST" });
-  } finally {
-    state.currentUser = null; state.homework = []; state.subjects = [];
-    $("#profileMenu").classList.add("hidden");
-    showScreen("login"); $("#loginIdInput").focus();
-  }
-});
-$("#backButton").addEventListener("click", attemptLeaveForm);
-$("#cancelButton").addEventListener("click", attemptLeaveForm);
-$("#keepEditingButton").addEventListener("click", () => $("#dialogBackdrop").classList.add("hidden"));
-$("#discardButton").addEventListener("click", () => { state.formDirty = false; $("#dialogBackdrop").classList.add("hidden"); showScreen("dashboard"); });
+function openDeleteDialog(deleteId) {
+  const item = state.homework.find(homework => homework.id === deleteId);
+  state.deleteTargetId = deleteId;
+  $("#deleteDialogDescription").textContent = `“${item.title}” 숙제를 삭제하면 다시 되돌릴 수 없어요.`;
+  $("#deleteDialogBackdrop").classList.remove("hidden");
+  $("#cancelDeleteButton").focus();
+}
+
 $("#cancelDeleteButton").addEventListener("click", () => { state.deleteTargetId = null; $("#deleteDialogBackdrop").classList.add("hidden"); });
 $("#confirmDeleteButton").addEventListener("click", async () => {
   const homeworkId = state.deleteTargetId;
@@ -479,9 +313,7 @@ $("#confirmDeleteButton").addEventListener("click", async () => {
     $("#confirmDeleteButton").disabled = false;
   }
 });
-$("#descriptionInput").addEventListener("input", event => { state.formDirty = true; $("#descriptionCount").textContent = `${event.target.value.length.toLocaleString()} / 2,000자`; });
-$("#homeworkForm").addEventListener("input", () => { state.formDirty = true; });
-$("#homeworkForm").addEventListener("submit", async event => {
+async function submitHomeworkForm(event) {
   event.preventDefault(); if (!validateForm()) return;
   const button = $("#saveButton"); button.disabled = true; button.textContent = "저장 중...";
   try {
@@ -496,7 +328,11 @@ $("#homeworkForm").addEventListener("submit", async event => {
   } catch {
     $("#formError").textContent = "숙제를 저장하지 못했어요. 다시 시도해 주세요."; $("#formError").classList.remove("hidden");
   } finally { button.disabled = false; if (!screens.form.classList.contains("hidden")) button.textContent = state.editingId ? "수정 내용 저장" : "숙제 저장"; }
-});
+}
+
+initializeLoginScreen({ enterDashboard });
+initializeDashboardScreen({ loadHomeworks, renderDashboard, renderSummary, renderHomework, updateHomeworkProgress, openForm, openDeleteDialog, showToast, showScreen });
+initializeHomeworkFormScreen({ renderSubjectOptions, attemptLeaveForm, submitHomeworkForm, showScreen });
 
 // CSRF 토큰을 준비하고 서버 세션에 로그인된 사용자가 있으면 대시보드로 복원합니다.
 async function initialize() {
