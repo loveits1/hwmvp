@@ -829,3 +829,22 @@ git diff --check
 - Java 소스 컴파일과 애플리케이션 패키징을 통과했습니다.
 - 변경한 JavaScript 모듈의 문법 검사와 공백 검사를 통과했습니다.
 - 전체 DB 통합 테스트는 로컬 Docker/Testcontainers 실행 환경이 없어 수행하지 못했습니다.
+
+## 2026-09-03 - 테스트 사용자별 비밀번호 분리 및 프로필 정렬 수정
+
+### 인증 데이터 변경
+
+- Flyway `V10__set_individual_test_user_passwords.sql`을 추가해 사용자 ID 1~4의 비밀번호를 요청된 서로 다른 BCrypt cost 12 해시로 변경했습니다.
+- 평문 복원이 불가능한 단방향 해시만 `users.password_hash`에 저장합니다.
+- 로그인 화면에서 공통 테스트 비밀번호를 표시하던 문구를 삭제했습니다.
+
+### 대시보드 정렬 수정
+
+- 숨겨진 관리 학생 선택기에도 인접 형제 CSS가 적용되면서 프로필·사용자 전환 버튼의 `margin-left: auto`가 해제되는 원인을 확인했습니다.
+- 관리 학생 선택기가 실제로 표시될 때만 인접 프로필 버튼의 여백을 조정하도록 `.student-switcher:not(.hidden) + .profile-button` 선택자로 제한했습니다.
+- 선택기가 숨겨진 학생 화면과 단일 연결 학생 화면에서는 프로필 버튼이 상단 오른쪽에 정렬됩니다.
+
+### 검증
+
+- `TestUserPasswordHashTest`에서 네 개의 평문과 V10 BCrypt 해시가 각각 일치하는지 검증합니다.
+- Maven 패키징과 `git diff --check`로 컴파일 및 공백 오류를 확인했습니다.
