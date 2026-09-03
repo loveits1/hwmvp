@@ -9,3 +9,6 @@ spring:
 logging:
   level:
     org.hibernate.SQL: debug
+    org.springframework.jdbc.core.JdbcTemplate: debug
+    org.loveits.hwmvp: debug
+    org.springframework.jdbc.core.StatementCreatorUtils: trace

@@ -337,6 +337,8 @@ spring:
 logging:
   level:
     org.hibernate.SQL: debug
+    org.springframework.jdbc.core.JdbcTemplate: debug
+    org.loveits.hwmvp: debug
 ```
 
 VS Code의 Java 실행도 `.env`를 자동으로 Spring 환경 변수에 전달하지 않을 수 있다. 저장소 루트에 `.vscode/launch.json`을 만들고 다음처럼 `envFile`을 지정한다.
@@ -347,10 +349,10 @@ VS Code의 Java 실행도 `.env`를 자동으로 Spring 환경 변수에 전달�
   "configurations": [
     {
       "type": "java",
-      "name": "ManagehwApplication",
+      "name": "HwmvpApplication (local)",
       "request": "launch",
-      "mainClass": "com.managehw.ManagehwApplication",
-      "projectName": "managehw",
+      "mainClass": "org.loveits.hwmvp.HwmvpApplication",
+      "projectName": "hwmvp",
       "envFile": "${workspaceFolder}/.env",
       "env": {
         "SPRING_PROFILES_ACTIVE": "local"
@@ -447,7 +449,7 @@ public class HomeController {
 
 ### 10.2 Spring Boot 실행
 
-VS Code의 Run and Debug에서 `ManagehwApplication`을 선택해 실행한다. 터미널에서 실행할 때는 셸에 DB 환경변수가 설정되어 있어야 한다.
+VS Code의 Run and Debug에서 `HwmvpApplication (local)`을 선택해 실행한다. 실행 중인 애플리케이션 로그와 JDBC SQL은 VS Code의 Debug Console에서 확인한다. 터미널에서 실행할 때는 셸에 DB 환경변수가 설정되어 있어야 한다.
 
 ```bash
 ./mvnw spring-boot:run

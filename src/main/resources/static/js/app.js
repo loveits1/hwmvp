@@ -4,6 +4,7 @@ import { $, addDays, escapeHtml, isoDate, parseDate, sameDay, startOfWeek } from
 import { initializeLoginScreen } from "./screens/login.js";
 import { initializeDashboardScreen } from "./screens/dashboard.js";
 import { initializeHomeworkFormScreen } from "./screens/homework-form.js";
+import { initializeFamilyLinksScreen, renderFamilyLinks } from "./screens/family-links.js";
 
 // 숙제 상태별 표시 문구와 강조색을 한곳에서 관리해 요약 카드와 목록의 표현을 통일합니다.
 const statusInfo = {
@@ -17,7 +18,7 @@ const statusInfo = {
 const subjectIcons = { 국어: "가", 영어: "A", 수학: "＋", 과학: "⚗", 사회: "⌁" };
 
 // 화면 전환 시 표시할 최상위 영역을 이름으로 조회할 수 있도록 보관합니다.
-const screens = { login: $("#loginScreen"), dashboard: $("#dashboardScreen"), form: $("#formScreen") };
+const screens = { login: $("#loginScreen"), family: $("#familyScreen"), dashboard: $("#dashboardScreen"), form: $("#formScreen") };
 // 진행률을 우선 적용하고, 미완료 숙제는 마감일과 오늘을 비교해 화면 상태를 결정합니다.
 function statusOf(item) {
   if (item.progress === 100) return "done";
@@ -46,9 +47,18 @@ function normalizeUser(user) {
     databaseId: Number(user.id),
     role: user.role,
     name: user.name,
-    studentDatabaseId: user.student?.id == null ? null : Number(user.student.id),
-    studentName: user.student?.name
+    students: (user.students || []).map(student => ({ ...student, id: Number(student.id) })),
+    selectedStudentId: (user.students || []).some(student => Number(student.id) === state.currentUser?.selectedStudentId)
+      ? state.currentUser.selectedStudentId : (user.students?.[0]?.id == null ? null : Number(user.students[0].id))
   };
+}
+
+function setCurrentUser(user) { state.currentUser = normalizeUser(user); }
+
+function enterApplication(user) {
+  setCurrentUser(user);
+  if (state.currentUser.role === "parent" && !state.currentUser.students.length) openFamilyManagement(true);
+  else enterDashboard();
 }
 
 // 현재 관리 대상 학생의 과목을 조회해 필터와 등록·수정 폼에서 함께 사용합니다.
@@ -98,15 +108,63 @@ function moveToNearestHomeworkDate() {
 }
 
 // 선택한 사용자 세션을 시작하고 학생 또는 연결 학생 기준의 대시보드 데이터를 불러옵니다.
-function enterDashboard(user) {
-  state.currentUser = normalizeUser(user);
-  user = state.currentUser;
+function enterDashboard(userResponse = null) {
+  if (userResponse) setCurrentUser(userResponse);
+  const user = state.currentUser;
+  if (user.role === "parent" && !user.students.length) { openFamilyManagement(true); return; }
   state.selectedDate = today; state.weekStart = startOfWeek(today); state.statusFilter = "all"; state.subjectFilter = "all";
   $("#profileName").textContent = user.name;
-  $("#profileContext").textContent = user.role === "student" ? "학생" : `${user.studentName} 학생의 숙제`;
+  $("#profileContext").textContent = user.role === "student" ? "학생" : `${studentName()} 학생의 숙제`;
   $("#profileAvatar").textContent = user.name[0];
   $("#profileMenuLabel").textContent = `${user.name} · ${user.role === "student" ? "학생" : "학부모"}`;
-  renderDashboard(); showScreen("dashboard"); loadSubjects(); loadHomeworks();
+  renderStudentSwitcher(); renderDashboard(); showScreen("dashboard"); loadSubjects(); loadHomeworks();
+}
+
+function renderStudentSwitcher() {
+  const parent = state.currentUser.role === "parent";
+  $("#studentSwitcher").classList.toggle("hidden", !parent || state.currentUser.students.length < 2);
+  $("#studentSelect").innerHTML = parent ? state.currentUser.students.map(student => `<option value="${student.id}">${escapeHtml(student.name)}</option>`).join("") : "";
+  if (parent) $("#studentSelect").value = String(state.currentUser.selectedStudentId);
+}
+
+async function loadFamilyLinks() {
+  $("#familyListSummary").textContent = "연결 정보를 불러오는 중이에요.";
+  $("#familyLinkList").innerHTML = '<div class="family-empty"><p>잠시만 기다려 주세요.</p></div>';
+  try { renderFamilyLinks(await requestJson("/api/family-links")); }
+  catch { $("#familyLinkList").innerHTML = '<div class="family-empty"><strong>연결 정보를 불러오지 못했어요.</strong><p>잠시 후 새로고침해 주세요.</p></div>'; }
+}
+
+function openFamilyManagement(onboarding = false) {
+	updateFamilyMode(onboarding);
+	$("#inviteCodeError").textContent = "";
+	showScreen("family"); loadFamilyLinks();
+}
+
+function updateFamilyMode(onboarding = false) {
+  const noStudent = state.currentUser.role === "parent" && !state.currentUser.students.length;
+  $("#familyTitle").textContent = noStudent ? "먼저 학생과 연결해 주세요" : "가족 연결 관리";
+  $("#familyDescription").textContent = noStudent ? "연결 요청을 보내고 학생이 승인하면 숙제 화면을 사용할 수 있어요." : "학생과 학부모의 연결 요청과 승인 상태를 관리해요.";
+  $("#familyBackButton").classList.toggle("hidden", onboarding || noStudent);
+}
+
+async function refreshUser() { setCurrentUser(await requestJson("/api/auth/me")); }
+
+async function refreshFamilyScreen() {
+  try { await refreshUser(); updateFamilyMode(); await loadFamilyLinks(); }
+  catch { showToast("연결 현황을 새로고침하지 못했어요."); }
+}
+
+async function logout() {
+  try { await requestJson("/api/auth/logout", { method: "POST" }); }
+  finally { state.currentUser = null; state.homework = []; state.subjects = []; showScreen("login"); $("#loginIdInput").focus(); }
+}
+
+async function switchStudent(studentId) {
+  state.currentUser.selectedStudentId = studentId;
+  state.selectedDate = today; state.weekStart = startOfWeek(today); state.statusFilter = "all"; state.subjectFilter = "all";
+  $("#profileContext").textContent = `${studentName()} 학생의 숙제`;
+  await Promise.all([loadSubjects(), loadHomeworks()]);
+  showToast(`${studentName()} 학생의 숙제로 전환했어요.`);
 }
 
 // 날짜, 요약, 과목, 숙제 영역을 현재 상태 기준으로 한 번에 동기화합니다.
@@ -152,9 +210,7 @@ function renderSummary() {
 // 학생 과목과 숙제에 남아 있는 과목을 합쳐 누락 없는 과목 필터를 만듭니다.
 function renderSubjects() {
   const select = $("#subjectFilter");
-  const apiSubjects = state.subjects.map(subject => subject.name);
-  const homeworkSubjects = state.homework.map(item => item.subject);
-  const subjects = [...new Set([...apiSubjects, ...homeworkSubjects])];
+  const subjects = ["국어", "영어", "수학", "기타"];
   if (state.subjectsLoading) {
     select.innerHTML = '<option value="all">과목 불러오는 중...</option>'; select.disabled = true; return;
   }
@@ -205,38 +261,31 @@ function renderHomework() {
       <span class="subject-icon" aria-hidden="true">${escapeHtml(subjectIcons[item.subject] || item.subject[0])}</span>
       <div class="homework-info"><div class="homework-meta"><span class="subject-name">${escapeHtml(item.subject)}</span>${item.createdByRole === "parent" ? `<span class="parent-badge">학부모 등록 · ${escapeHtml(item.createdByName)}</span>` : ""}</div>
         <h3><button class="homework-title-button" type="button" data-detail-id="${item.id}" aria-expanded="${expanded}" aria-controls="homework-detail-${item.id}" title="${escapeHtml(item.title)}"><span>${escapeHtml(item.title)}</span><span class="detail-chevron" aria-hidden="true">⌄</span></button></h3>
-        <div class="homework-description ${expanded ? "" : "hidden"}" id="homework-detail-${item.id}"><strong>상세내용</strong><p>${escapeHtml(item.description || "등록된 상세 내용이 없어요.")}</p></div>
+        <div class="homework-description ${expanded ? "" : "hidden"}" id="homework-detail-${item.id}"><strong>할 일 · ${item.completedTaskCount}/${item.totalTaskCount} 완료</strong><div class="homework-task-list">${item.tasks.map(task => `<label class="homework-task ${task.completed ? "completed" : ""}"><input type="checkbox" data-task-id="${task.id}" ${task.completed ? "checked" : ""} ${state.taskSavingIds.has(task.id) ? "disabled" : ""}><span>${escapeHtml(task.content)}</span></label>`).join("")}</div></div>
         <span class="due">${dueLabel(item)}</span><small class="update-meta">${escapeHtml(updatedLabel(item))}</small></div>
       <div class="progress" aria-label="진행률 ${item.progress}%"><div class="progress-label"><span>진행률</span><strong>${item.progress}%</strong></div><div class="progress-track"><div class="progress-fill" style="width:${item.progress}%"></div></div></div>
-      <div class="status-control">
-        <button class="status-button" type="button" data-progress-menu-id="${item.id}" aria-label="${escapeHtml(item.title)} 진행률 변경" aria-expanded="false" ${state.progressSavingId === item.id ? "disabled" : ""}>
-          <span>${state.progressSavingId === item.id ? "저장 중" : info.label}</span><strong>${item.progress}%</strong><span aria-hidden="true">⌄</span>
-        </button>
-        <div class="progress-menu hidden" data-progress-menu="${item.id}" role="menu" aria-label="진행률 선택">
-          ${[0, 25, 50, 75, 100].map(progress => `<button type="button" role="menuitemradio" aria-checked="${item.progress === progress}" data-progress-id="${item.id}" data-progress-value="${progress}"><span>${progress === 0 ? "미완료" : progress === 100 ? "완료" : "진행 중"}</span><strong>${progress}%</strong></button>`).join("")}
-        </div>
-      </div>
+      <div class="status-control"><span class="status-pill"><span>${info.label}</span><strong>${item.completedTaskCount}/${item.totalTaskCount} · ${item.progress}%</strong></span></div>
       <button class="card-menu-button" type="button" data-menu-id="${item.id}" aria-label="${escapeHtml(item.title)} 메뉴 열기" aria-expanded="false">⋯</button>
       <div class="card-action-menu hidden" data-action-menu="${item.id}"><button type="button" data-edit-id="${item.id}">수정</button><button class="delete-action" type="button" data-delete-id="${item.id}">삭제</button></div>
     </article>`;
   }).join("");
 }
 
-// 선택한 진행률을 서버에 저장하고 성공한 응답으로 로컬 목록을 즉시 동기화합니다.
-async function updateHomeworkProgress(homeworkId, progress) {
-  state.progressSavingId = homeworkId; renderHomework();
+// Task 체크 상태를 저장하고 서버가 Task 개수로 다시 계산한 진행률을 반영합니다.
+async function updateTaskCompletion(taskId, completed) {
+  state.taskSavingIds.add(taskId); renderHomework();
   try {
-    const updated = await requestJson(`/api/homeworks/${homeworkId}/progress`, {
+    const updated = await requestJson(`/api/homework-tasks/${taskId}/completion`, {
       method: "PATCH",
-      body: JSON.stringify({ progress })
+      body: JSON.stringify({ completed })
     });
-    const index = state.homework.findIndex(item => item.id === homeworkId);
+    const index = state.homework.findIndex(item => item.id === updated.id);
     if (index >= 0) state.homework[index] = updated;
-    showToast(progress === 100 ? "숙제를 완료했어요." : `진행률을 ${progress}%로 변경했어요.`);
+    showToast(updated.progress === 100 ? "모든 할 일을 완료했어요." : `진행률이 ${updated.progress}%로 변경됐어요.`);
   } catch {
-    showToast("진행률을 저장하지 못했어요. 다시 시도해 주세요.");
+    showToast("할 일 상태를 저장하지 못했어요. 다시 시도해 주세요.");
   } finally {
-    state.progressSavingId = null; renderDashboard();
+    state.taskSavingIds.delete(taskId); renderDashboard();
   }
 }
 
@@ -249,35 +298,48 @@ function openForm(item = null) {
   $("#targetStudent").textContent = studentName();
   $("#assignedDateInput").value = defaultAssignedDate;
   $("#dueDateInput").value = item?.dueDate || defaultAssignedDate;
+  state.formTasks = (item?.tasks || [{ id: null, content: "" }]).map((task, index) => ({ id: task.id || null, content: task.content || "", key: index + 1 }));
   if (item) {
-    state.selectedSubject = state.subjects.some(subject => subject.name === item.subject) ? item.subject : "기타";
-    $("#customSubject").value = state.selectedSubject === "기타" ? item.subject : "";
+    state.selectedSubject = ["국어", "영어", "수학", "기타"].includes(item.subject) ? item.subject : "기타";
     $("#titleInput").value = item.title;
-    $("#descriptionInput").value = item.description || "";
   }
-  $("#descriptionCount").textContent = "0 / 2,000자"; $("#formError").classList.add("hidden");
-  if (item) $("#descriptionCount").textContent = `${($("#descriptionInput").value.length).toLocaleString()} / 2,000자`;
-  clearErrors(); renderSubjectOptions(); showScreen("form");
+  $("#formError").classList.add("hidden");
+  clearErrors(); renderSubjectOptions(); renderTaskInputs(); showScreen("form");
 }
-// 조회된 과목과 사용자 정의 과목 입력 진입점인 '기타' 선택지를 렌더링합니다.
+// 업무 분류를 국어, 영어, 수학, 기타 네 과목으로 고정해 렌더링합니다.
 function renderSubjectOptions() {
-  const subjects = [...state.subjects.map(subject => subject.name), "기타"];
+  const subjects = ["국어", "영어", "수학", "기타"];
   $("#subjectOptions").innerHTML = subjects.map(subject => `<button class="subject-option ${state.selectedSubject === subject ? "selected" : ""}" type="button" data-subject="${escapeHtml(subject)}">${escapeHtml(subject)}${subject === "기타" ? " +" : ""}</button>`).join("");
-  $("#customSubjectField").classList.toggle("hidden", state.selectedSubject !== "기타");
+}
+
+function renderTaskInputs(focusLast = false) {
+  $("#taskInputList").innerHTML = state.formTasks.map((task, index) => `<div class="task-input-row"><span>${index + 1}</span><input type="text" maxlength="500" data-task-input="${task.key}" value="${escapeHtml(task.content)}" placeholder="예) 리딩 p.113~115" aria-label="할 일 ${index + 1}"><button type="button" data-remove-task="${task.key}" aria-label="할 일 ${index + 1} 삭제" ${state.formTasks.length === 1 ? "disabled" : ""}>×</button></div>`).join("");
+  $("#addTaskButton").disabled = state.formTasks.length >= 50;
+  if (focusLast) $("#taskInputList").querySelector(".task-input-row:last-child input")?.focus();
+}
+
+function addTaskInput() {
+  if (state.formTasks.length >= 50) return;
+  const key = Math.max(0, ...state.formTasks.map(task => task.key)) + 1;
+  state.formTasks.push({ id: null, content: "", key }); state.formDirty = true; renderTaskInputs(true);
+}
+
+function removeTaskInput(key) {
+  if (state.formTasks.length === 1) return;
+  state.formTasks = state.formTasks.filter(task => task.key !== key); state.formDirty = true; renderTaskInputs();
 }
 // 재검증 전에 기존 오류 표시를 제거해 현재 입력값의 오류만 남깁니다.
 function clearErrors() {
-  ["subject", "customSubject", "title", "assignedDate", "dueDate"].forEach(name => { $("[id='" + name + "Error']").textContent = ""; });
+  ["subject", "title", "assignedDate", "dueDate", "tasks"].forEach(name => { $("[id='" + name + "Error']").textContent = ""; });
   document.querySelectorAll(".invalid").forEach(element => element.classList.remove("invalid"));
 }
 // 필수값, 과목 중복, 선택일과 마감일 순서를 저장 요청 전에 검증합니다.
 function validateForm() {
   clearErrors(); let valid = true;
-  const title = $("#titleInput").value.trim(), assignedDate = $("#assignedDateInput").value, dueDate = $("#dueDateInput").value, custom = $("#customSubject").value.trim();
+  const title = $("#titleInput").value.trim(), assignedDate = $("#assignedDateInput").value, dueDate = $("#dueDateInput").value;
   if (!state.selectedSubject) { $("#subjectError").textContent = "과목을 선택해 주세요."; valid = false; }
-  if (state.selectedSubject === "기타" && !custom) { $("#customSubjectError").textContent = "기타 과목명을 입력해 주세요."; $("#customSubject").classList.add("invalid"); valid = false; }
-  const duplicate = state.subjects.some(subject => subject.name.toLowerCase() === custom.toLowerCase()) || state.homework.some(item => item.id !== state.editingId && item.subject.toLowerCase() === custom.toLowerCase());
-  if (state.selectedSubject === "기타" && duplicate) { $("#customSubjectError").textContent = "이미 등록된 과목이에요."; $("#customSubject").classList.add("invalid"); valid = false; }
+  const blankTask = state.formTasks.find(task => !task.content.trim());
+  if (blankTask) { $("#tasksError").textContent = "모든 할 일의 내용을 입력해 주세요."; document.querySelector(`[data-task-input="${blankTask.key}"]`)?.classList.add("invalid"); valid = false; }
   if (!title) { $("#titleError").textContent = "숙제 제목을 입력해 주세요."; $("#titleInput").classList.add("invalid"); valid = false; }
   if (!assignedDate) { $("#assignedDateError").textContent = "숙제 선택일을 선택해 주세요."; $("#assignedDateInput").classList.add("invalid"); valid = false; }
   if (!dueDate) { $("#dueDateError").textContent = "마감일을 선택해 주세요."; $("#dueDateInput").classList.add("invalid"); valid = false; }
@@ -317,9 +379,10 @@ async function submitHomeworkForm(event) {
   event.preventDefault(); if (!validateForm()) return;
   const button = $("#saveButton"); button.disabled = true; button.textContent = "저장 중...";
   try {
-    const subject = state.selectedSubject === "기타" ? $("#customSubject").value.trim() : state.selectedSubject;
+    const subject = state.selectedSubject;
     const homeworkId = state.editingId;
-    const payload = JSON.stringify({ subject, title: $("#titleInput").value.trim(), description: $("#descriptionInput").value.trim(), assignedDate: $("#assignedDateInput").value, dueDate: $("#dueDateInput").value });
+    const tasks = state.formTasks.map(task => ({ id: task.id, content: task.content.trim() }));
+    const payload = JSON.stringify({ subject, title: $("#titleInput").value.trim(), assignedDate: $("#assignedDateInput").value, dueDate: $("#dueDateInput").value, tasks });
     const url = homeworkId ? `/api/homeworks/${homeworkId}` : `/api/students/${studentDatabaseId()}/homeworks`;
     await requestJson(url, { method: homeworkId ? "PATCH" : "POST", body: payload });
     state.selectedDate = parseDate($("#assignedDateInput").value); state.weekStart = startOfWeek(state.selectedDate); state.formDirty = false; state.editingId = null;
@@ -330,16 +393,17 @@ async function submitHomeworkForm(event) {
   } finally { button.disabled = false; if (!screens.form.classList.contains("hidden")) button.textContent = state.editingId ? "수정 내용 저장" : "숙제 저장"; }
 }
 
-initializeLoginScreen({ enterDashboard });
-initializeDashboardScreen({ loadHomeworks, renderDashboard, renderSummary, renderHomework, updateHomeworkProgress, openForm, openDeleteDialog, showToast, showScreen });
-initializeHomeworkFormScreen({ renderSubjectOptions, attemptLeaveForm, submitHomeworkForm, showScreen });
+initializeLoginScreen({ enterApplication });
+initializeDashboardScreen({ loadHomeworks, renderDashboard, renderSummary, renderHomework, updateTaskCompletion, openForm, openDeleteDialog, showToast, showScreen, openFamilyManagement, logout, switchStudent });
+initializeHomeworkFormScreen({ renderSubjectOptions, renderTaskInputs, addTaskInput, removeTaskInput, attemptLeaveForm, submitHomeworkForm, showScreen });
+initializeFamilyLinksScreen({ loadFamilyLinks, refreshUser, refreshFamilyScreen, updateFamilyMode, enterDashboard, showToast, logout });
 
 // CSRF 토큰을 준비하고 서버 세션에 로그인된 사용자가 있으면 대시보드로 복원합니다.
 async function initialize() {
   try {
     await loadCsrfToken();
     const user = await requestJson("/api/auth/me");
-    enterDashboard(user);
+    enterApplication(user);
   } catch (error) {
     showScreen("login");
     if (error.status && error.status !== 401) {

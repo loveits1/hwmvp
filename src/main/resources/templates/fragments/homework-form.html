@@ -18,11 +18,6 @@
     <fieldset>
       <legend>과목 <span aria-hidden="true">*</span></legend>
       <div class="subject-options" id="subjectOptions"></div>
-      <div class="form-field hidden" id="customSubjectField">
-        <label for="customSubject">기타 과목명 <span aria-hidden="true">*</span></label>
-        <input id="customSubject" name="customSubject" type="text" maxlength="30" placeholder="과목명을 입력해 주세요" aria-describedby="customSubjectError">
-        <small class="field-error" id="customSubjectError"></small>
-      </div>
       <small class="field-error" id="subjectError"></small>
     </fieldset>
     <div class="form-field">
@@ -30,17 +25,20 @@
       <input id="titleInput" name="title" type="text" maxlength="200" placeholder="예) 수학 익힘책 54~57쪽 풀기" aria-describedby="titleError">
       <small class="field-error" id="titleError"></small>
     </div>
-    <div class="form-field">
-      <div class="label-row"><label for="descriptionInput">상세내용</label><small id="descriptionCount">0 / 2,000자</small></div>
-      <textarea id="descriptionInput" name="description" maxlength="2000" rows="6" placeholder="숙제에 필요한 내용을 자세히 입력해 주세요."></textarea>
-    </div>
+    <fieldset class="task-fieldset">
+      <div class="label-row"><legend>할 일 <span aria-hidden="true">*</span></legend><small>최대 50개</small></div>
+      <p class="task-help">완료 여부를 따로 확인할 수 있도록 할 일을 한 줄씩 입력해 주세요.</p>
+      <div class="task-input-list" id="taskInputList"></div>
+      <button class="secondary-button add-task-button" id="addTaskButton" type="button">＋ 할 일 추가</button>
+      <small class="field-error" id="tasksError"></small>
+    </fieldset>
     <div class="form-field">
       <label for="dueDateInput">마감일 <span aria-hidden="true">*</span></label>
       <input id="dueDateInput" name="dueDate" type="date" aria-describedby="dueDateError">
       <small class="field-error" id="dueDateError"></small>
     </div>
     <p class="form-note">숙제 선택일은 달력에 표시될 날짜이고, 마감일은 숙제를 끝내야 하는 날짜예요.</p>
-    <p class="form-note">새 숙제는 진행률 0%로 등록돼요.</p>
+    <p class="form-note">진행률은 완료한 할 일 수를 기준으로 자동 계산돼요.</p>
     <div class="form-error hidden" id="formError" role="alert"></div>
     <div class="form-actions">
       <button class="secondary-button" id="cancelButton" type="button">취소</button>

@@ -1,4 +1,3 @@
-import { requestJson } from "../api.js";
 import { state, today } from "../state.js";
 import { $, addDays, parseDate, startOfWeek } from "../utils.js";
 
@@ -15,10 +14,8 @@ export function initializeDashboardScreen(actions) {
       else state.expandedHomeworkIds.add(detailId);
       actions.renderHomework();
     }
-    const progressMenuId = Number(event.target.closest("[data-progress-menu-id]")?.dataset.progressMenuId);
-    if (progressMenuId) toggleProgressMenu(event, progressMenuId);
-    const progressButton = event.target.closest("[data-progress-value]");
-    if (progressButton) actions.updateHomeworkProgress(Number(progressButton.dataset.progressId), Number(progressButton.dataset.progressValue));
+    const taskCheckbox = event.target.closest("[data-task-id]");
+    if (taskCheckbox) actions.updateTaskCompletion(Number(taskCheckbox.dataset.taskId), taskCheckbox.checked);
     const menuId = Number(event.target.closest("[data-menu-id]")?.dataset.menuId);
     if (menuId) toggleActionMenu(event, menuId);
     const editId = Number(event.target.closest("[data-edit-id]")?.dataset.editId);
@@ -32,8 +29,8 @@ export function initializeDashboardScreen(actions) {
 
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
-    document.querySelectorAll(".progress-menu,.card-action-menu").forEach(element => element.classList.add("hidden"));
-    document.querySelectorAll("[data-progress-menu-id],.card-menu-button").forEach(button => button.setAttribute("aria-expanded", "false"));
+    document.querySelectorAll(".card-action-menu").forEach(element => element.classList.add("hidden"));
+    document.querySelectorAll(".card-menu-button").forEach(button => button.setAttribute("aria-expanded", "false"));
   });
 
   $("#subjectFilter").addEventListener("change", event => { state.subjectFilter = event.target.value; actions.renderHomework(); });
@@ -45,30 +42,17 @@ export function initializeDashboardScreen(actions) {
   $("#menuButton").addEventListener("click", () => { $("#sidebar").classList.add("open"); $("#scrim").classList.add("show"); });
   $("#scrim").addEventListener("click", closeSidebar);
   $("#profileButton").addEventListener("click", () => { const menu = $("#profileMenu"); menu.classList.toggle("hidden"); $("#profileButton").setAttribute("aria-expanded", String(!menu.classList.contains("hidden"))); });
-  $("#changeUserButton").addEventListener("click", async () => {
-    try { await requestJson("/api/auth/logout", { method: "POST" }); }
-    finally {
-      state.currentUser = null; state.homework = []; state.subjects = [];
-      $("#profileMenu").classList.add("hidden"); actions.showScreen("login"); $("#loginIdInput").focus();
-    }
-  });
+  $("#studentSelect").addEventListener("change", event => actions.switchStudent(Number(event.target.value)));
+  $("#familyManagementButton").addEventListener("click", () => { $("#profileMenu").classList.add("hidden"); actions.openFamilyManagement(false); });
+  $("#changeUserButton").addEventListener("click", actions.logout);
 }
 
 function closeSidebar() { $("#sidebar").classList.remove("open"); $("#scrim").classList.remove("show"); }
 
-function toggleProgressMenu(event, homeworkId) {
-  const menu = document.querySelector(`[data-progress-menu="${homeworkId}"]`);
-  const willOpen = menu.classList.contains("hidden");
-  document.querySelectorAll(".progress-menu").forEach(element => element.classList.add("hidden"));
-  document.querySelectorAll("[data-progress-menu-id]").forEach(button => button.setAttribute("aria-expanded", "false"));
-  menu.classList.toggle("hidden", !willOpen);
-  event.target.closest("[data-progress-menu-id]").setAttribute("aria-expanded", String(willOpen));
-}
-
 function toggleActionMenu(event, homeworkId) {
   const menu = document.querySelector(`[data-action-menu="${homeworkId}"]`);
   const willOpen = menu.classList.contains("hidden");
-  document.querySelectorAll(".card-action-menu,.progress-menu").forEach(element => element.classList.add("hidden"));
+  document.querySelectorAll(".card-action-menu").forEach(element => element.classList.add("hidden"));
   document.querySelectorAll(".card-menu-button").forEach(button => button.setAttribute("aria-expanded", "false"));
   menu.classList.toggle("hidden", !willOpen);
   event.target.closest("[data-menu-id]").setAttribute("aria-expanded", String(willOpen));

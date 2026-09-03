@@ -708,3 +708,124 @@ git diff --check
 - 모든 JavaScript 모듈의 문법 검사를 통과했습니다.
 - Maven 컴파일로 Thymeleaf fragment를 포함한 리소스 패키징과 Java 소스 컴파일을 확인했습니다.
 - 변경 파일에서 공백 오류가 없음을 확인했습니다.
+
+## 2026-09-02 - 학생·학부모 가족 연결 및 다중 학생 전환 구현
+
+### 업무 정책 확정
+
+- 학생 계정에 8자리 연결 코드를 발급하고 학부모가 코드를 입력해 연결을 요청하도록 정했습니다.
+- 연결 요청은 `LINK_INVITED`, 학생 승인 후에는 `LINK_APPROVED`, 거절·요청 취소·연결 해제 후에는 `LINK_DISCONNECTED` 상태로 관리합니다.
+- 승인된 관계에서만 학부모가 학생의 과목과 숙제에 접근할 수 있으며, 연결 해제 후에도 기존 숙제와 변경 이력은 유지합니다.
+- 학생이 연결 승인 권한을 가지며 학생과 학부모 양쪽에서 활성 연결을 해제할 수 있게 했습니다.
+
+### DB 및 서버 구현
+
+- Flyway `V8__add_student_invite_code.sql`에서 학생별 연결 코드 컬럼, 형식 제약 및 부분 유니크 인덱스를 추가했습니다.
+- 기존 학생 계정에도 마이그레이션 시 연결 코드를 채우고, 재발급하면 이전 코드가 즉시 무효화되도록 구현했습니다.
+- 가족 연결 조회, 연결 요청, 학생 승인, 거절·취소·해제 및 코드 재발급 API를 추가했습니다.
+- 요청자의 서버 세션 역할과 관계 소유자를 검증하며 승인 대기가 아닌 관계의 임의 승인을 차단했습니다.
+- 현재 사용자 인증 응답을 단일 `student`에서 승인된 `students` 목록으로 변경했습니다.
+
+### fragment 및 화면 흐름 구현
+
+- `fragments/family-links.html`과 `screens/family-links.js`를 추가해 별도 페이지 없이 기존 단일 페이지 안에서 가족 연결 화면을 전환합니다.
+- 연결 학생이 없는 학부모는 로그아웃하지 않고 연결 안내 화면으로 이동하며 연결 요청과 승인 대기 상태를 확인할 수 있습니다.
+- 학생은 자신의 연결 코드를 복사·재발급하고 들어온 학부모 요청을 승인하거나 거절할 수 있습니다.
+- 대시보드 프로필 메뉴에 가족 연결 관리 진입점을 추가했습니다.
+- 학부모에게 승인된 학생이 여러 명이면 대시보드 상단 선택기로 관리 학생을 전환하고 숙제·과목·필터 상태를 다시 불러옵니다.
+- 연결 현황 새로고침 시 현재 사용자 정보도 갱신해 외부에서 승인된 직후 숙제 화면으로 이동할 수 있게 했습니다.
+- 데스크톱과 모바일 화면에 맞춘 가족 연결 카드·목록·학생 선택기 스타일을 추가했습니다.
+
+### 문서 및 검증
+
+- `job_desc.md`의 로그인, 사용자 매핑, 구현 현황, API 및 프런트엔드 모듈 구조를 현재 구현 기준으로 갱신했습니다.
+- 다음 검증 명령을 통과했습니다.
+
+```bash
+./mvnw -q -DskipTests package
+node --check src/main/resources/static/js/app.js
+node --check src/main/resources/static/js/screens/family-links.js
+node --check src/main/resources/static/js/screens/dashboard.js
+node --check src/main/resources/static/js/screens/login.js
+git diff --check
+```
+
+- 전체 `./mvnw test`는 로컬 Docker 엔진이 실행 중이지 않아 Testcontainers PostgreSQL 시작 단계에서 중단되었습니다.
+
+## 2026-09-02 - 가족 연결 요청 성공 응답 처리 수정 및 로컬 로그 설정
+
+### 장애 원인과 수정
+
+- 학부모 연결 요청 API는 관계 저장 성공 후 본문 없는 HTTP 201을 반환했습니다.
+- 브라우저 공통 API 모듈이 HTTP 204만 빈 응답으로 간주하고 201 응답 본문을 JSON으로 파싱해, 서버 처리가 성공해도 JavaScript `SyntaxError`가 발생했습니다.
+- `requestJson()`이 응답 본문을 먼저 문자열로 읽고, 본문이 있을 때만 JSON으로 변환하도록 수정했습니다.
+- 이에 따라 본문 없는 200번대 응답은 상태 코드와 관계없이 `null`로 정상 처리합니다.
+- HTTP 오류 응답에 JSON Problem Detail이 있으면 `error.detail`로 보존하도록 보완했습니다.
+
+### VS Code 및 로컬 로그 설정
+
+- `.vscode/launch.json`을 추가해 `.env`와 `local` Spring 프로필로 `HwmvpApplication`을 실행할 수 있게 했습니다.
+- `application-local.yml`에 Spring JDBC SQL과 애플리케이션 패키지 DEBUG 로그를 추가했습니다.
+- 가족 연결 요청·승인·해제와 코드 재발급 시 식별자 중심의 동작 로그를 남기고, 보안상 연결 코드 값은 로그에 기록하지 않습니다.
+- `DEVELOPMENT_SETUP.md`의 예전 애플리케이션 클래스명과 프로젝트명을 현재 프로젝트 기준으로 수정하고 Debug Console 확인 방법을 기록했습니다.
+
+### 검증
+
+```bash
+./mvnw -q -DskipTests package
+node --check src/main/resources/static/js/api.js
+node --input-type=module -e 'globalThis.fetch=async()=>new Response("",{status:201}); const api=await import("./src/main/resources/static/js/api.js"); const result=await api.requestJson("/test",{method:"POST"}); if(result!==null) process.exit(1)'
+git diff --check
+```
+
+- Maven 패키징과 JavaScript 문법 검사를 통과했습니다.
+- 본문 없는 HTTP 201 모의 응답이 오류 없이 `null`로 처리되는 것을 확인했습니다.
+
+## 2026-09-03 - 숙제 Task 체크리스트 및 자동 진행률 구현
+
+### 업무 규칙 변경
+
+- 숙제 과목을 국어, 영어, 수학, 기타 네 분류로 고정했습니다.
+- 기존 단일 상세내용 입력을 최소 1개, 최대 50개의 독립 Task 입력으로 변경했습니다.
+- Task 내용은 필수이며 한 건당 최대 500자로 제한했습니다.
+- 진행률 수동 선택을 제거하고 `완료 Task 수 ÷ 전체 Task 수 × 100`을 정수로 반올림해 계산하도록 변경했습니다.
+- 전체 Task 완료는 완료, 일부 완료는 진행 중, 완료 Task가 없으면 미완료로 표시하며 미완료 Task가 있는 기한 경과 숙제는 기한 지남을 우선 표시합니다.
+
+### DB 마이그레이션
+
+- Flyway `V9__add_homework_tasks.sql`에서 `homework_tasks` 테이블과 숙제·완료자 외래키, 내용·순서·완료 상태 제약 및 조회 인덱스를 추가했습니다.
+- 기존 숙제는 상세내용이 있으면 상세내용을, 없으면 숙제 제목을 Task 한 건으로 이관합니다.
+- 기존 진행률이 100%인 숙제의 이관 Task만 완료 상태로 보존하고, 부분 진행률은 정확한 Task 근거가 없어 미완료로 이관합니다.
+- 기존 과학·사회 등 네 분류 밖의 숙제는 학생별 기타 과목으로 변경하며 원본 과목 레코드는 삭제하지 않습니다.
+
+### 서버 구현
+
+- 숙제 저장 요청에 Task ID와 내용을 포함하고 응답에 Task 목록, 완료 개수, 전체 개수 및 계산 진행률을 반환하도록 DTO를 변경했습니다.
+- 숙제 등록 시 Task를 함께 만들고, 수정 시 기존 Task ID의 완료 상태를 유지하면서 내용·순서를 수정합니다.
+- 폼에서 제거한 Task는 삭제하고 새 Task는 미완료 상태로 추가합니다.
+- `PATCH /api/homework-tasks/{taskId}/completion` API에서 Task 완료·취소, 완료자와 완료 시각, 숙제 최근 수정자를 하나의 트랜잭션으로 저장합니다.
+- 숙제 이력 스냅샷에 숙제 본문과 정렬된 Task 목록을 함께 저장합니다.
+- 기존 수동 진행률 API와 요청 DTO를 제거하고 조회 SQL에서 Task 집계로 진행률을 계산합니다.
+
+### UI 및 JavaScript 변경
+
+- 숙제 등록·수정 fragment에 동적 Task 입력 목록과 할 일 추가·삭제 버튼을 구현했습니다.
+- Enter 키로 Task 입력을 추가할 수 있고 빈 Task가 있으면 저장을 차단합니다.
+- 과목 선택과 과목 필터를 국어, 영어, 수학, 기타로 고정했습니다.
+- 숙제 카드를 펼치면 Task별 체크박스를 표시하고 체크 결과를 서버에 즉시 저장합니다.
+- 카드에는 완료 Task 수, 전체 Task 수와 자동 계산된 진행률을 함께 표시합니다.
+- 기존 0·25·50·75·100 진행률 선택 메뉴를 제거했습니다.
+
+### 검증
+
+```bash
+./mvnw -q -DskipTests package
+node --check src/main/resources/static/js/app.js
+node --check src/main/resources/static/js/screens/homework-form.js
+node --check src/main/resources/static/js/screens/dashboard.js
+git diff --check
+```
+
+- Java 소스 컴파일과 애플리케이션 패키징을 통과했습니다.
+- 변경한 JavaScript 모듈의 문법 검사와 공백 검사를 통과했습니다.
+- 전체 DB 통합 테스트는 로컬 Docker/Testcontainers 실행 환경이 없어 수행하지 못했습니다.

@@ -1,7 +1,9 @@
 package org.loveits.hwmvp.homework.dto;
 
 import java.time.LocalDate;
+import java.util.List;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -10,7 +12,7 @@ import jakarta.validation.constraints.Size;
 public record HomeworkSaveRequest(
 		@NotBlank @Size(max = 100) String subject,
 		@NotBlank @Size(max = 200) String title,
-		@Size(max = 2000) String description,
 		@NotNull LocalDate assignedDate,
-		@NotNull LocalDate dueDate) {
+		@NotNull LocalDate dueDate,
+		@NotNull @Size(min = 1, max = 50) List<@Valid HomeworkTaskRequest> tasks) {
 }

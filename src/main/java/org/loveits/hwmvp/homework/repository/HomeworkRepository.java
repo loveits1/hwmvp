@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.loveits.hwmvp.homework.dto.HomeworkResponse;
+import org.loveits.hwmvp.homework.dto.HomeworkTaskRequest;
+import org.loveits.hwmvp.homework.dto.HomeworkTaskResponse;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -17,10 +19,12 @@ public class HomeworkRepository {
 			       subject.id AS subject_id,
 			       subject.name AS subject,
 			       homework.title,
-			       homework.description,
 			       homework.assigned_date,
 			       homework.due_date,
-			       replace(progress_code.code, 'PROGRESS_', '')::integer AS progress,
+			       CASE WHEN task_count.total = 0 THEN 0
+			            ELSE round(task_count.completed * 100.0 / task_count.total)::integer END AS progress,
+			       task_count.completed AS completed_task_count,
+			       task_count.total AS total_task_count,
 			       lower(replace(creator_role.code, 'ROLE_', '')) AS created_by_role,
 			       creator.name AS created_by_name,
 			       updater.name AS updated_by_name,
@@ -31,6 +35,11 @@ public class HomeworkRepository {
 			JOIN users creator ON creator.id = homework.created_by
 			JOIN common_codes creator_role ON creator_role.id = creator.role_code_id
 			JOIN users updater ON updater.id = homework.updated_by
+			LEFT JOIN LATERAL (
+			    SELECT count(*)::integer AS total,
+			           count(*) FILTER (WHERE task.is_completed)::integer AS completed
+			    FROM homework_tasks task WHERE task.homework_id = homework.id
+			) task_count ON true
 			WHERE homework.is_deleted = false
 			""";
 
@@ -54,7 +63,7 @@ public class HomeworkRepository {
 						+ " ORDER BY homework.assigned_date, homework.due_date, homework.id")
 				.param("studentId", studentId);
 		if (date != null) statement = statement.param("date", date);
-		return statement.query(this::map).list();
+		return statement.query(this::map).list().stream().map(this::withTasks).toList();
 	}
 
 	/**
@@ -66,8 +75,7 @@ public class HomeworkRepository {
 	public Optional<HomeworkResponse> findById(Long homeworkId) {
 		return jdbcClient.sql(SELECT_HOMEWORK + " AND homework.id = :homeworkId")
 				.param("homeworkId", homeworkId)
-				.query(this::map)
-				.optional();
+				.query(this::map).optional().map(this::withTasks);
 	}
 
 	/**
@@ -102,7 +110,7 @@ public class HomeworkRepository {
 	 *
 	 * @return 생성된 숙제 ID
 	 */
-	public Long create(Long studentId, Long subjectId, String title, String description,
+	public Long create(Long studentId, Long subjectId, String title,
 			LocalDate assignedDate, LocalDate dueDate, Long actorId) {
 		return jdbcClient.sql("""
 				INSERT INTO homeworks (
@@ -110,7 +118,7 @@ public class HomeworkRepository {
 				    progress_code_id, created_by, updated_by
 				)
 				VALUES (
-				    :studentId, :subjectId, :title, :description, :assignedDate, :dueDate,
+				    :studentId, :subjectId, :title, NULL, :assignedDate, :dueDate,
 				    (SELECT id FROM common_codes WHERE code = 'PROGRESS_0'),
 				    :actorId, :actorId
 				)
@@ -119,7 +127,6 @@ public class HomeworkRepository {
 				.param("studentId", studentId)
 				.param("subjectId", subjectId)
 				.param("title", title)
-				.param("description", description)
 				.param("assignedDate", assignedDate)
 				.param("dueDate", dueDate)
 				.param("actorId", actorId)
@@ -128,13 +135,13 @@ public class HomeworkRepository {
 	}
 
 	/** 숙제의 과목, 제목, 상세내용, 배정일, 마감일과 최근 수정자를 변경합니다. */
-	public void update(Long homeworkId, Long subjectId, String title, String description,
+	public void update(Long homeworkId, Long subjectId, String title,
 			LocalDate assignedDate, LocalDate dueDate, Long actorId) {
 		jdbcClient.sql("""
 				UPDATE homeworks
 				SET subject_id = :subjectId,
 				    title = :title,
-				    description = :description,
+				    description = NULL,
 				    assigned_date = :assignedDate,
 				    due_date = :dueDate,
 				    updated_by = :actorId,
@@ -144,28 +151,62 @@ public class HomeworkRepository {
 				.param("homeworkId", homeworkId)
 				.param("subjectId", subjectId)
 				.param("title", title)
-				.param("description", description)
 				.param("assignedDate", assignedDate)
 				.param("dueDate", dueDate)
 				.param("actorId", actorId)
 				.update();
 	}
 
-	/** 지정한 백분율에 대응하는 공통코드로 숙제 진행률을 변경합니다. */
-	public void updateProgress(Long homeworkId, int progress, Long actorId) {
+	public void saveTasks(Long homeworkId, List<HomeworkTaskRequest> tasks) {
+		List<Long> ids = tasks.stream().map(HomeworkTaskRequest::id).filter(java.util.Objects::nonNull).toList();
+		if (ids.isEmpty()) {
+			jdbcClient.sql("DELETE FROM homework_tasks WHERE homework_id = :homeworkId")
+					.param("homeworkId", homeworkId).update();
+		} else {
+			jdbcClient.sql("DELETE FROM homework_tasks WHERE homework_id = :homeworkId AND id NOT IN (:ids)")
+					.param("homeworkId", homeworkId).param("ids", ids).update();
+		}
+		for (int index = 0; index < tasks.size(); index++) {
+			HomeworkTaskRequest task = tasks.get(index);
+			if (task.id() == null) {
+				jdbcClient.sql("INSERT INTO homework_tasks (homework_id, content, sort_order) VALUES (:homeworkId, :content, :sortOrder)")
+						.param("homeworkId", homeworkId).param("content", task.content().trim()).param("sortOrder", index).update();
+			} else {
+				int updated = jdbcClient.sql("UPDATE homework_tasks SET content = :content, sort_order = :sortOrder, updated_at = CURRENT_TIMESTAMP WHERE id = :taskId AND homework_id = :homeworkId")
+						.param("content", task.content().trim()).param("sortOrder", index).param("taskId", task.id()).param("homeworkId", homeworkId).update();
+				if (updated == 0) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "유효하지 않은 Task입니다.");
+			}
+		}
+	}
+
+	public Optional<Long> findTaskHomeworkId(Long taskId) {
+		return jdbcClient.sql("SELECT homework_id FROM homework_tasks WHERE id = :taskId")
+				.param("taskId", taskId).query(Long.class).optional();
+	}
+
+	public void updateTaskCompletion(Long taskId, boolean completed, Long actorId) {
 		jdbcClient.sql("""
-				UPDATE homeworks
-				SET progress_code_id = (
-				        SELECT id FROM common_codes WHERE code = :progressCode
-				    ),
-				    updated_by = :actorId,
-				    updated_at = CURRENT_TIMESTAMP
-				WHERE id = :homeworkId AND is_deleted = false
-				""")
-				.param("homeworkId", homeworkId)
-				.param("progressCode", "PROGRESS_" + progress)
-				.param("actorId", actorId)
-				.update();
+				UPDATE homework_tasks SET is_completed = :completed,
+				completed_by = CASE WHEN :completed THEN :actorId ELSE NULL END,
+				completed_at = CASE WHEN :completed THEN CURRENT_TIMESTAMP ELSE NULL END,
+				updated_at = CURRENT_TIMESTAMP WHERE id = :taskId
+				""").param("completed", completed).param("actorId", actorId).param("taskId", taskId).update();
+	}
+
+	public void touchHomework(Long homeworkId, Long actorId) {
+		jdbcClient.sql("UPDATE homeworks SET updated_by = :actorId, updated_at = CURRENT_TIMESTAMP WHERE id = :homeworkId")
+				.param("actorId", actorId).param("homeworkId", homeworkId).update();
+	}
+
+	private List<HomeworkTaskResponse> findTasks(Long homeworkId) {
+		return jdbcClient.sql("SELECT id, content, is_completed, sort_order FROM homework_tasks WHERE homework_id = :homeworkId ORDER BY sort_order, id")
+				.param("homeworkId", homeworkId).query((rs, row) -> new HomeworkTaskResponse(rs.getLong("id"), rs.getString("content"), rs.getBoolean("is_completed"), rs.getInt("sort_order"))).list();
+	}
+
+	private HomeworkResponse withTasks(HomeworkResponse homework) {
+		return new HomeworkResponse(homework.id(), homework.studentId(), homework.subjectId(), homework.subject(), homework.title(),
+				homework.assignedDate(), homework.dueDate(), homework.progress(), homework.completedTaskCount(), homework.totalTaskCount(),
+				findTasks(homework.id()), homework.createdByRole(), homework.createdByName(), homework.updatedByName(), homework.updatedAt());
 	}
 
 	/** 숙제를 실제 삭제하지 않고 삭제 상태와 삭제 수행자 정보를 기록합니다. */
@@ -191,7 +232,11 @@ public class HomeworkRepository {
 	 * @return PostgreSQL JSONB 형태의 숙제 데이터
 	 */
 	public String snapshot(Long homeworkId) {
-		return jdbcClient.sql("SELECT to_jsonb(homework)::text FROM homeworks homework WHERE id = :homeworkId")
+		return jdbcClient.sql("""
+				SELECT jsonb_build_object('homework', to_jsonb(homework), 'tasks',
+				       coalesce((SELECT jsonb_agg(to_jsonb(task) ORDER BY task.sort_order, task.id) FROM homework_tasks task WHERE task.homework_id = homework.id), '[]'::jsonb))::text
+				FROM homeworks homework WHERE id = :homeworkId
+				""")
 				.param("homeworkId", homeworkId)
 				.query(String.class)
 				.single();
@@ -224,10 +269,10 @@ public class HomeworkRepository {
 	private HomeworkResponse map(java.sql.ResultSet resultSet, int rowNumber) throws java.sql.SQLException {
 		return new HomeworkResponse(
 				resultSet.getLong("id"), resultSet.getLong("student_id"),
-				resultSet.getLong("subject_id"), resultSet.getString("subject"),
-				resultSet.getString("title"), resultSet.getString("description"),
+				resultSet.getLong("subject_id"), resultSet.getString("subject"), resultSet.getString("title"),
 				resultSet.getObject("assigned_date", LocalDate.class),
 				resultSet.getObject("due_date", LocalDate.class), resultSet.getInt("progress"),
+				resultSet.getInt("completed_task_count"), resultSet.getInt("total_task_count"), List.of(),
 				resultSet.getString("created_by_role"), resultSet.getString("created_by_name"),
 				resultSet.getString("updated_by_name"),
 				resultSet.getObject("updated_at", java.time.OffsetDateTime.class));

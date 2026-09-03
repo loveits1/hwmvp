@@ -13,12 +13,19 @@ export async function requestJson(url, options = {}) {
       ...options.headers
     }
   });
+  const responseText = await response.text();
+  let responseBody = null;
+  if (responseText) {
+    try { responseBody = JSON.parse(responseText); }
+    catch { responseBody = responseText; }
+  }
   if (!response.ok) {
     const error = new Error(`API request failed: ${response.status}`);
     error.status = response.status;
+    error.detail = typeof responseBody === "object" ? responseBody?.detail : null;
     throw error;
   }
-  return response.status === 204 ? null : response.json();
+  return responseBody;
 }
 
 export async function loadCsrfToken() {

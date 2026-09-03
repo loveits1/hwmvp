@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<section class="screen family-screen hidden" id="familyScreen" aria-labelledby="familyTitle" th:fragment="family-links-screen">
+  <header class="family-header">
+    <a class="brand" href="#" id="familyBrand"><span class="brand-mark">✓</span><span>하루숙제</span></a>
+    <button class="secondary-button hidden" id="familyBackButton" type="button">← 숙제 화면으로</button>
+    <button class="secondary-button" id="familyLogoutButton" type="button">로그아웃</button>
+  </header>
+  <main class="family-content">
+    <section class="family-intro">
+      <p class="eyebrow">FAMILY CONNECTION</p>
+      <h1 id="familyTitle">가족 연결 관리</h1>
+      <p id="familyDescription">학생과 학부모가 같은 숙제를 안전하게 함께 관리해요.</p>
+    </section>
+
+    <div class="family-grid">
+      <section class="family-card hidden" id="parentInviteCard">
+        <span class="family-card-icon" aria-hidden="true">⌁</span>
+        <h2>학생 연결하기</h2>
+        <p>학생 화면에 표시된 8자리 연결 코드를 입력해 주세요. 학생이 승인하면 숙제를 함께 관리할 수 있어요.</p>
+        <form id="linkInvitationForm" class="invite-form" novalidate>
+          <label for="inviteCodeInput">학생 연결 코드</label>
+          <div><input id="inviteCodeInput" type="text" maxlength="8" autocomplete="off" placeholder="예) A7K2M9Q4" required><button class="primary-button" id="inviteSubmitButton" type="submit">연결 요청</button></div>
+          <p class="field-error" id="inviteCodeError" role="alert"></p>
+        </form>
+      </section>
+
+      <section class="family-card hidden" id="studentCodeCard">
+        <span class="family-card-icon" aria-hidden="true">⌁</span>
+        <h2>내 연결 코드</h2>
+        <p>연결할 학부모에게 아래 코드를 알려 주세요. 코드를 다시 만들면 이전 코드는 사용할 수 없어요.</p>
+        <div class="invite-code-box"><strong id="studentInviteCode">--------</strong><button class="secondary-button" id="copyInviteCodeButton" type="button">복사</button></div>
+        <button class="text-button" id="regenerateInviteCodeButton" type="button">새 코드 만들기</button>
+      </section>
+
+      <section class="family-card family-list-card">
+        <div class="family-card-heading"><div><h2 id="familyListTitle">연결 현황</h2><p id="familyListSummary">연결 정보를 불러오는 중이에요.</p></div><button class="icon-button" id="refreshFamilyLinksButton" type="button" aria-label="연결 현황 새로고침">↻</button></div>
+        <div class="family-link-list" id="familyLinkList" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+</section>
+</body>
+</html>

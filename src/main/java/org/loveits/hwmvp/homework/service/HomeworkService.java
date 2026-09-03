@@ -4,8 +4,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.loveits.hwmvp.homework.dto.HomeworkResponse;
-import org.loveits.hwmvp.homework.dto.HomeworkProgressRequest;
 import org.loveits.hwmvp.homework.dto.HomeworkSaveRequest;
+import org.loveits.hwmvp.homework.dto.HomeworkTaskCompletionRequest;
 import org.loveits.hwmvp.homework.repository.HomeworkRepository;
 import org.loveits.hwmvp.user.service.StudentAccessService;
 import org.springframework.http.HttpStatus;
@@ -15,7 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class HomeworkService {
-	private static final java.util.Set<Integer> ALLOWED_PROGRESS = java.util.Set.of(0, 25, 50, 75, 100);
+	private static final java.util.Set<String> ALLOWED_SUBJECTS = java.util.Set.of("국어", "영어", "수학", "기타");
 
 	private final HomeworkRepository repository;
 	private final StudentAccessService accessService;
@@ -39,9 +39,11 @@ public class HomeworkService {
 	public HomeworkResponse create(Long studentId, HomeworkSaveRequest request, Long actorId) {
 		checkAccess(studentId, actorId);
 		checkDates(request.assignedDate(), request.dueDate());
+		checkSubject(request.subject());
 		Long subjectId = repository.findOrCreateSubject(studentId, request.subject().trim());
 		Long homeworkId = repository.create(studentId, subjectId, request.title().trim(),
-				nullIfBlank(request.description()), request.assignedDate(), request.dueDate(), actorId);
+				request.assignedDate(), request.dueDate(), actorId);
+		repository.saveTasks(homeworkId, request.tasks());
 		repository.addHistory(homeworkId, "HW_CREATED", actorId, null,
 				repository.snapshot(homeworkId));
 		return find(homeworkId);
@@ -55,10 +57,12 @@ public class HomeworkService {
 		HomeworkResponse existing = find(homeworkId);
 		checkAccess(existing.studentId(), actorId);
 		checkDates(request.assignedDate(), request.dueDate());
+		checkSubject(request.subject());
 		String beforeData = repository.snapshot(homeworkId);
 		Long subjectId = repository.findOrCreateSubject(existing.studentId(), request.subject().trim());
 		repository.update(homeworkId, subjectId, request.title().trim(),
-				nullIfBlank(request.description()), request.assignedDate(), request.dueDate(), actorId);
+				request.assignedDate(), request.dueDate(), actorId);
+		repository.saveTasks(homeworkId, request.tasks());
 		repository.addHistory(homeworkId, "HW_UPDATED", actorId, beforeData,
 				repository.snapshot(homeworkId));
 		return find(homeworkId);
@@ -75,21 +79,16 @@ public class HomeworkService {
 				repository.snapshot(homeworkId));
 	}
 
-	/**
-	 * 허용된 진행률인지 검증하고 권한 확인 후 진행률과 변경 이력을 저장합니다.
-	 */
 	@Transactional
-	public HomeworkResponse updateProgress(Long homeworkId, HomeworkProgressRequest request, Long actorId) {
-		if (!ALLOWED_PROGRESS.contains(request.progress())) {
-			throw new ResponseStatusException(
-					HttpStatus.BAD_REQUEST, "진행률은 0, 25, 50, 75, 100 중 하나여야 합니다.");
-		}
+	public HomeworkResponse updateTaskCompletion(Long taskId, HomeworkTaskCompletionRequest request, Long actorId) {
+		Long homeworkId = repository.findTaskHomeworkId(taskId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task를 찾을 수 없습니다."));
 		HomeworkResponse existing = find(homeworkId);
 		checkAccess(existing.studentId(), actorId);
 		String beforeData = repository.snapshot(homeworkId);
-		repository.updateProgress(homeworkId, request.progress(), actorId);
-		repository.addHistory(homeworkId, "HW_PROGRESS_UPDATED", actorId, beforeData,
-				repository.snapshot(homeworkId));
+		repository.updateTaskCompletion(taskId, request.completed(), actorId);
+		repository.touchHomework(homeworkId, actorId);
+		repository.addHistory(homeworkId, "HW_PROGRESS_UPDATED", actorId, beforeData, repository.snapshot(homeworkId));
 		return find(homeworkId);
 	}
 
@@ -111,8 +110,8 @@ public class HomeworkService {
 		}
 	}
 
-	/** 선택 입력값의 앞뒤 공백을 제거하고 빈 문자열은 DB 저장용 {@code null}로 변환합니다. */
-	private String nullIfBlank(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
+	private void checkSubject(String subject) {
+		if (!ALLOWED_SUBJECTS.contains(subject.trim()))
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "과목은 국어, 영어, 수학, 기타 중 하나여야 합니다.");
 	}
 }

@@ -19,12 +19,13 @@
     <header class="topbar">
       <button class="mobile-menu" id="menuButton" type="button" aria-label="날짜 메뉴 열기">☰</button>
       <div class="topbar-copy"><p class="eyebrow">HOMEWORK DASHBOARD</p><h1>오늘도 하나씩 해볼까요?</h1></div>
+      <label class="student-switcher hidden" id="studentSwitcher"><span>관리 학생</span><select id="studentSelect" aria-label="관리할 학생 선택"></select></label>
       <button class="profile-button" id="profileButton" type="button" aria-expanded="false">
         <span class="profile-copy"><strong id="profileName"></strong><small id="profileContext"></small></span>
         <span class="avatar" id="profileAvatar"></span><span aria-hidden="true">⌄</span>
       </button>
       <div class="profile-menu hidden" id="profileMenu">
-        <p id="profileMenuLabel"></p><button id="changeUserButton" type="button">로그아웃 및 사용자 전환</button>
+        <p id="profileMenuLabel"></p><button id="familyManagementButton" type="button">가족 연결 관리</button><button id="changeUserButton" type="button">로그아웃 및 사용자 전환</button>
       </div>
     </header>
     <div class="dashboard">

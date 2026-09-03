@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "HwmvpApplication (local)",
+      "request": "launch",
+      "mainClass": "org.loveits.hwmvp.HwmvpApplication",
+      "projectName": "hwmvp",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "local"
+      }
+    }
+  ]
+}

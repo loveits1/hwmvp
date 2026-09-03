@@ -5,8 +5,8 @@ import java.util.List;
 
 import org.loveits.hwmvp.auth.dto.AuthenticatedUser;
 import org.loveits.hwmvp.homework.dto.HomeworkResponse;
-import org.loveits.hwmvp.homework.dto.HomeworkProgressRequest;
 import org.loveits.hwmvp.homework.dto.HomeworkSaveRequest;
+import org.loveits.hwmvp.homework.dto.HomeworkTaskCompletionRequest;
 import org.loveits.hwmvp.homework.service.HomeworkService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -70,12 +70,12 @@ public class HomeworkController {
 		service.delete(homeworkId, user.id());
 	}
 
-	/** 숙제 진행률을 0, 25, 50, 75, 100 중 하나로 변경합니다. */
-	@PatchMapping("/homeworks/{homeworkId}/progress")
-	public HomeworkResponse updateProgress(
-			@PathVariable Long homeworkId,
-			@Valid @RequestBody HomeworkProgressRequest request,
+	/** Task 체크 상태를 저장하고 Task 개수에서 다시 계산한 숙제 진행률을 반환합니다. */
+	@PatchMapping("/homework-tasks/{taskId}/completion")
+	public HomeworkResponse updateTaskCompletion(
+			@PathVariable Long taskId,
+			@Valid @RequestBody HomeworkTaskCompletionRequest request,
 			@AuthenticationPrincipal AuthenticatedUser user) {
-		return service.updateProgress(homeworkId, request, user.id());
+		return service.updateTaskCompletion(taskId, request, user.id());
 	}
 }

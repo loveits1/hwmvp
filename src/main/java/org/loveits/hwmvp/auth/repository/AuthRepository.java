@@ -1,5 +1,6 @@
 package org.loveits.hwmvp.auth.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.loveits.hwmvp.auth.dto.AuthenticatedUser;
@@ -39,42 +40,38 @@ public class AuthRepository {
 				.optional();
 	}
 
-	/** 인증된 사용자와 승인된 관리 학생 정보를 대시보드용 응답으로 조회합니다. */
+	/** 인증된 사용자와 승인된 전체 관리 학생 목록을 대시보드용 응답으로 조회합니다. */
 	public CurrentUserResponse findCurrentUser(Long userId) {
-		return jdbcClient.sql("""
+		CurrentUserResponse user = jdbcClient.sql("""
 				SELECT u.id, u.login_id, u.name,
-				       lower(replace(role_code.code, 'ROLE_', '')) AS role,
-				       linked_student.id AS student_id,
-				       linked_student.login_id AS student_login_id,
-				       linked_student.name AS student_name
+				       lower(replace(role_code.code, 'ROLE_', '')) AS role
 				FROM users u
 				JOIN common_codes role_code ON role_code.id = u.role_code_id
-				LEFT JOIN LATERAL (
-				    SELECT student.id, student.login_id, student.name
-				    FROM parent_student_links link
-				    JOIN users student ON student.id = link.student_id
-				    JOIN common_codes status_code ON status_code.id = link.status_code_id
-				    WHERE link.parent_id = u.id AND status_code.code = 'LINK_APPROVED'
-				    ORDER BY link.id
-				    LIMIT 1
-				) linked_student ON role_code.code = 'ROLE_PARENT'
 				WHERE u.id = :userId
 				""")
 				.param("userId", userId)
-				.query((resultSet, rowNumber) -> {
-					Long studentId = resultSet.getObject("student_id", Long.class);
-					LinkedStudentResponse student = studentId == null ? null : new LinkedStudentResponse(
-							studentId,
-							resultSet.getString("student_login_id"),
-							resultSet.getString("student_name"));
-					return new CurrentUserResponse(
+				.query((resultSet, rowNumber) -> new CurrentUserResponse(
 							resultSet.getLong("id"),
 							resultSet.getString("login_id"),
 							resultSet.getString("role"),
 							resultSet.getString("name"),
-							student);
-				})
+							List.of()))
 				.single();
+
+		if (!"parent".equals(user.role())) return user;
+		List<LinkedStudentResponse> students = jdbcClient.sql("""
+				SELECT student.id, student.login_id, student.name
+				FROM parent_student_links link
+				JOIN users student ON student.id = link.student_id
+				JOIN common_codes status_code ON status_code.id = link.status_code_id
+				WHERE link.parent_id = :userId AND status_code.code = 'LINK_APPROVED'
+				ORDER BY student.name, student.id
+				""")
+				.param("userId", userId)
+				.query((resultSet, rowNumber) -> new LinkedStudentResponse(
+						resultSet.getLong("id"), resultSet.getString("login_id"), resultSet.getString("name")))
+				.list();
+		return new CurrentUserResponse(user.id(), user.loginId(), user.role(), user.name(), students);
 	}
 
 	/** 로그인 성공 시 실패 횟수를 초기화하고 마지막 로그인 시각을 기록합니다. */
